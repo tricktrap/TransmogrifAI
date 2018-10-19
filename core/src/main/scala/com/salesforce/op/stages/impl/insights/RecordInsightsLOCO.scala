@@ -40,7 +40,7 @@ import com.salesforce.op.utils.spark.OpVectorMetadata
 import org.apache.spark.annotation.Experimental
 import org.apache.spark.ml.Model
 import org.apache.spark.ml.linalg.Vectors
-import org.apache.spark.ml.param.IntParam
+import org.apache.spark.ml.param.{IntParam, ParamValidators}
 
 import scala.collection.mutable.PriorityQueue
 
@@ -64,6 +64,15 @@ class RecordInsightsLOCO[T <: Model[T]]
   def setTopK(value: Int): this.type = set(topK, value)
   def getTopK: Int = $(topK)
   setDefault(topK -> 20)
+
+
+  final val ind = new IntParam(
+    parent = this, name = "ind",
+    doc = "Index of ",
+    isValid = ParamValidators.gtEq(0)
+  )
+  def setInd(value: Int): this.type = set(ind, value)
+  def getInd: Int = $(ind)
 
   private val modelApply = model match {
     case m: SelectedModel => m.transformFn
@@ -91,7 +100,7 @@ class RecordInsightsLOCO[T <: Model[T]]
       featureArray.update(i, (oldInd, 0))
       val score = modelApply(labelDummy, OPVector(Vectors.sparse(featureSize, featureArray))).score
       val diffs = baseScore.zip(score).map{ case (b, s) => b - s }
-      val max = diffs.maxBy(math.abs)
+      val max = if (isSet(ind)) math.abs(diffs($(ind))) else diffs.maxBy(math.abs)
       maxHeap.enqueue((i, max, diffs))
       if (i >= k) maxHeap.dequeue()
       featureArray.update(i, (oldInd, oldVal))
