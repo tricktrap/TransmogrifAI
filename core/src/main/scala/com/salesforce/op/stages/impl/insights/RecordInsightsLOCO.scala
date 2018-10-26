@@ -96,7 +96,7 @@ class RecordInsightsLOCO[T <: Model[T]]
 
   override def transformFn: OPVector => TextMap = (features) => {
     val baseScore = modelApply(labelDummy, features).score
-    val maxHeap = PriorityQueue.empty(MinScore)
+    val maxHeap = if (isSet(ind)) PriorityQueue.empty(MinScoreRaw) else PriorityQueue.empty(MinScore)
 
     // TODO sparse implementation only works if changing values to zero - use dense vector to test effect of zeros
     val featuresSparse = features.value.toSparse
@@ -144,4 +144,9 @@ class RecordInsightsLOCO[T <: Model[T]]
 private[insights] object MinScore extends Ordering[(Int, Double, Array[Double])] {
   def compare(x: (Int, Double, Array[Double]), y: (Int, Double, Array[Double])): Int =
     math.abs(y._2) compare math.abs(x._2)
+}
+
+private[insights] object MinScoreRaw extends Ordering[(Int, Double, Array[Double])] {
+  def compare(x: (Int, Double, Array[Double]), y: (Int, Double, Array[Double])): Int =
+    y._2 compare x._2
 }
