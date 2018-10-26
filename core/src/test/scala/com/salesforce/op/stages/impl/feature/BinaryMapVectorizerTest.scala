@@ -74,6 +74,7 @@ class BinaryMapVectorizerTest
     val result = transformed.collect(vector)
     result shouldBe expectedResult
     val field = transformed.schema(estimator.getOutputFeatureName)
+    println(field.metadata)
     assertNominal(field, Array.fill(expectedResult.head.value.size)(true), result)
     OpVectorMetadata(field) shouldEqual expectedMeta
     val vectorMetadata = estimator.getMetadata()

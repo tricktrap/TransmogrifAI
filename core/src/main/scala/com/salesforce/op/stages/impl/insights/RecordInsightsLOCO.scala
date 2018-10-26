@@ -31,6 +31,7 @@
 package com.salesforce.op.stages.impl.insights
 
 import com.salesforce.op.UID
+import com.salesforce.op.features.FeatureSparkTypes
 import com.salesforce.op.features.types._
 import com.salesforce.op.stages.base.unary.UnaryTransformer
 import com.salesforce.op.stages.impl.selector.SelectedModel
@@ -41,14 +42,17 @@ import org.apache.spark.annotation.Experimental
 import org.apache.spark.ml.Model
 import org.apache.spark.ml.linalg.Vectors
 import org.apache.spark.ml.param.{IntParam, ParamValidators}
+import org.apache.spark.sql.functions.col
+import org.apache.spark.sql.{DataFrame, Dataset}
 
 import scala.collection.mutable.PriorityQueue
 
 /**
  * Creates record level insights for model predictions. Takes the model to explain as a constructor argument.
  * The input feature is the feature vector fed into the model.
- * @param model         model instance that you wish to explain
- * @param uid           uid for instance
+ *
+ * @param model model instance that you wish to explain
+ * @param uid   uid for instance
  */
 @Experimental
 class RecordInsightsLOCO[T <: Model[T]]
@@ -61,8 +65,11 @@ class RecordInsightsLOCO[T <: Model[T]]
     parent = this, name = "topK",
     doc = "Number of insights to keep for each record"
   )
+
   def setTopK(value: Int): this.type = set(topK, value)
+
   def getTopK: Int = $(topK)
+
   setDefault(topK -> 20)
 
 
@@ -71,7 +78,9 @@ class RecordInsightsLOCO[T <: Model[T]]
     doc = "Index of ",
     isValid = ParamValidators.gtEq(0)
   )
+
   def setInd(value: Int): this.type = set(ind, value)
+
   def getInd: Int = $(ind)
 
   private val modelApply = model match {
@@ -80,8 +89,10 @@ class RecordInsightsLOCO[T <: Model[T]]
     case m => toOPUnchecked(m).transformFn
   }
   private val labelDummy = RealNN(0.0)
-
-  private lazy val featureInfo = OpVectorMetadata(getInputSchema()(in1.name)).getColumnHistory().map(_.toJson(false))
+  private lazy val meta = OpVectorMetadata(getInputSchema()(in1.name))
+  private lazy val featureInfo = meta.getColumnHistory()
+  // .map(_.toJson(false))
+  private lazy val columns = meta.columns
 
   override def transformFn: OPVector => TextMap = (features) => {
     val baseScore = modelApply(labelDummy, features).score
@@ -97,10 +108,20 @@ class RecordInsightsLOCO[T <: Model[T]]
     var i = 0
     while (i < filledSize) {
       val (oldInd, oldVal) = featureArray(i)
+      val parentType = columns(i).parentFeatureType
+      /*
+      if (parentType.contains(Seq(FeatureType.typeName[Binary], FeatureType.typeName[BinaryMap]))) {
+        featureArray.update(i, (oldInd, 1 - oldVal))
+      } else {
+        featureArray.update(i, (oldInd, 0))
+      }
+      */
+
+
       featureArray.update(i, (oldInd, 0))
       val score = modelApply(labelDummy, OPVector(Vectors.sparse(featureSize, featureArray))).score
-      val diffs = baseScore.zip(score).map{ case (b, s) => b - s }
-      val max = if (isSet(ind)) math.abs(diffs($(ind))) else diffs.maxBy(math.abs)
+      val diffs = baseScore.zip(score).map { case (b, s) => b - s }
+      val max = if (isSet(ind)) diffs($(ind)) else diffs.maxBy(math.abs)
       maxHeap.enqueue((i, max, diffs))
       if (i >= k) maxHeap.dequeue()
       featureArray.update(i, (oldInd, oldVal))
@@ -108,7 +129,13 @@ class RecordInsightsLOCO[T <: Model[T]]
     }
 
     val top = maxHeap.dequeueAll
-    top.map{ case (k, _, v) => RecordInsightsParser.insightToText(featureInfo(k), v) }
+    top.map { case (k, _, v) =>
+      val info = featureInfo(k)
+      val value = RecordInsightsParser.insightToText(info.toJson(false), v)._2
+      info.columnName -> value
+
+
+    }
       .toMap.toTextMap
   }
 }
