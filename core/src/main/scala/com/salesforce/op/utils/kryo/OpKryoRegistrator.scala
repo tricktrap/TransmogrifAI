@@ -40,6 +40,8 @@ class OpKryoRegistrator extends OpKryoRegistratorBase {
       Seq(
         classOf[com.salesforce.op.filters.FeatureDistribution],
         classOf[com.salesforce.op.filters.Summary],
+        classOf[com.salesforce.op.stages.impl.feature.TextMapStats],
+        classOf[com.salesforce.op.stages.impl.feature.TextStats],
         Class.forName("com.salesforce.op.filters.PreparedFeatures$$anonfun$summaries$1"))
     }: _*)
   }

@@ -82,6 +82,7 @@ class OpKryoRegistratorBase extends KryoRegistrator {
         classOf[scala.collection.immutable.Map[_, _]],
         classOf[scala.math.BigDecimal],
         classOf[scala.math.BigInt],
+        scala.collection.immutable.HashMap.empty[Any, Any].getClass,
         scala.collection.immutable.Map.empty[Any, Any].getClass,
         scala.collection.immutable.Set.empty[Any].getClass) ++
         classOf[DefaultArraySerializers].getDeclaredClasses() ++
@@ -97,6 +98,7 @@ class OpKryoRegistratorBase extends KryoRegistrator {
 
     // A bunch of anonymous classes
     kryo.register(Class.forName("breeze.linalg.DenseVector$mcD$sp"))
+    kryo.register(Class.forName("scala.Enumeration$Val"))
     kryo.register(Class.forName("scala.collection.immutable.MapLike$$anon$2"))
     kryo.register(Class.forName("scala.collection.immutable.MapLike$ImmutableDefaultKeySet"))
     kryo.register(Class.forName("scala.math.Ordering$$anon$4"))
@@ -146,6 +148,7 @@ private[op] case object OpKryoClasses {
   lazy val SparkClasses: Seq[Class[_]] = Seq(
     classOf[org.apache.spark.internal.io.FileCommitProtocol.TaskCommitMessage],
     classOf[org.apache.spark.ml.linalg.Vector],
+    classOf[org.apache.spark.ml.tree.ContinuousSplit],
     classOf[org.apache.spark.ml.tree.Split],
     classOf[org.apache.spark.mllib.linalg.Vector],
     classOf[org.apache.spark.mllib.stat.MultivariateOnlineSummarizer],
@@ -157,6 +160,7 @@ private[op] case object OpKryoClasses {
     classOf[org.apache.spark.sql.catalyst.expressions.UnsafeRow],
     classOf[org.apache.spark.sql.catalyst.expressions.codegen.LazilyGeneratedOrdering],
     classOf[org.apache.spark.sql.catalyst.trees.Origin],
+    classOf[org.apache.spark.sql.catalyst.util.QuantileSummaries],
     classOf[org.apache.spark.sql.execution.datasources.BasicWriteTaskStats],
     classOf[org.apache.spark.sql.execution.datasources.ExecutedWriteSummary],
     classOf[org.apache.spark.sql.types.ArrayType],
@@ -165,13 +169,23 @@ private[op] case object OpKryoClasses {
     classOf[org.apache.spark.sql.types.StructField],
     classOf[org.apache.spark.sql.types.StructType],
     Class.forName("com.databricks.spark.avro.DefaultSource$SerializableConfiguration"),
-    Class.forName("org.apache.spark.sql.execution.datasources.FileFormatWriter$WriteTaskResult"),
+    Class.forName("org.apache.spark.broadcast.TorrentBroadcast"),
     Class.forName("org.apache.spark.ml.classification.MultiClassSummarizer"),
     Class.forName("org.apache.spark.ml.feature.LabeledPoint"),
     Class.forName("org.apache.spark.ml.linalg.MatrixUDT"),
     Class.forName("org.apache.spark.ml.linalg.VectorUDT"),
     Class.forName("org.apache.spark.ml.optim.WeightedLeastSquares$Aggregator"),
+    Class.forName("org.apache.spark.ml.optim.aggregator.HingeAggregator"),
+    Class.forName("org.apache.spark.ml.optim.aggregator.LogisticAggregator"),
+    Class.forName("org.apache.spark.ml.tree.impl.DecisionTreeMetadata"),
+    Class.forName("org.apache.spark.ml.tree.impl.DTStatsAggregator"),
     Class.forName("org.apache.spark.mllib.evaluation.binary.BinaryLabelCounter"),
+    Class.forName("org.apache.spark.mllib.tree.configuration.QuantileStrategy$"),
+    Class.forName("org.apache.spark.mllib.tree.impurity.Gini$"),
+    Class.forName("org.apache.spark.mllib.tree.impurity.GiniAggregator"),
+    Class.forName("org.apache.spark.mllib.tree.impurity.VarianceAggregator"),
+    Class.forName("org.apache.spark.mllib.tree.model.ImpurityStats"),
+    Class.forName("org.apache.spark.sql.execution.datasources.FileFormatWriter$WriteTaskResult"),
     org.apache.spark.sql.catalyst.expressions.Ascending.getClass,
     org.apache.spark.sql.catalyst.expressions.Descending.getClass,
     org.apache.spark.sql.catalyst.expressions.NullsFirst.getClass,

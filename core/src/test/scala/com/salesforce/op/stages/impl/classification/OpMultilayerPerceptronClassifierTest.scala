@@ -45,6 +45,8 @@ class OpMultilayerPerceptronClassifierTest extends OpEstimatorSpec[Prediction,
   OpPredictorWrapperModel[MultilayerPerceptronClassificationModel],
   OpPredictorWrapper[MultilayerPerceptronClassifier, MultilayerPerceptronClassificationModel]] with PredictionEquality {
 
+  spark
+
   override def specName: String = Spec[OpMultilayerPerceptronClassifier]
 
   val (inputData, rawFeature1, feature2) = TestFeatureBuilder("label", "features",
