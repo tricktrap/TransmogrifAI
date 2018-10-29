@@ -109,16 +109,16 @@ class RecordInsightsLOCO[T <: Model[T]]
     while (i < filledSize) {
       val (oldInd, oldVal) = featureArray(i)
       val parentType = columns(i).parentFeatureType
-      /*
+
       if (parentType.contains(Seq(FeatureType.typeName[Binary], FeatureType.typeName[BinaryMap]))) {
         featureArray.update(i, (oldInd, 1 - oldVal))
       } else {
         featureArray.update(i, (oldInd, 0))
       }
-      */
 
 
-      featureArray.update(i, (oldInd, 0))
+
+      // featureArray.update(i, (oldInd, 0))
       val score = modelApply(labelDummy, OPVector(Vectors.sparse(featureSize, featureArray))).score
       val diffs = baseScore.zip(score).map { case (b, s) => b - s }
       val max = if (isSet(ind)) diffs($(ind)) else diffs.maxBy(math.abs)
