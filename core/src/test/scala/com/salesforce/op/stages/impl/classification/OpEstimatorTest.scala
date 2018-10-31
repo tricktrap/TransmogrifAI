@@ -28,24 +28,21 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package com.salesforce.op.utils.kryo
+package com.salesforce.op.stages.impl.classification
 
-import com.esotericsoftware.kryo.Kryo
+import com.salesforce.op.features.types.FeatureType
+import com.salesforce.op.stages.{OpPipelineStage, OpTransformer}
+import com.salesforce.op.test.OpEstimatorSpec
+import com.salesforce.op.utils.kryo.OpKryoRegistrator
+import org.apache.spark.ml.{Estimator, Model}
+import org.apache.spark.serializer.KryoRegistrator
 
-class OpKryoRegistrator extends OpKryoRegistratorBase {
-  override def registerCustomClasses(kryo: Kryo): Unit = {
-    super.registerCustomClasses(kryo)
+import scala.reflect.ClassTag
+import scala.reflect.runtime.universe.WeakTypeTag
 
-    doClassRegistration(kryo)({
-      Seq(
-        classOf[com.salesforce.op.filters.FeatureDistribution],
-        classOf[com.salesforce.op.filters.Summary],
-        classOf[com.salesforce.op.stages.impl.feature.TextMapStats],
-        classOf[com.salesforce.op.stages.impl.feature.TextStats],
-        classOf[ml.dmlc.xgboost4j.LabeledPoint],
-        classOf[ml.dmlc.xgboost4j.java.Booster],
-        classOf[ml.dmlc.xgboost4j.scala.Booster],
-        Class.forName("com.salesforce.op.filters.PreparedFeatures$$anonfun$summaries$1"))
-    }: _*)
-  }
+abstract class OpEstimatorTest[O <: FeatureType : WeakTypeTag : ClassTag,
+  ModelType <: Model[ModelType] with OpPipelineStage[O] with OpTransformer : ClassTag,
+  EstimatorType <: Estimator[ModelType] with OpPipelineStage[O] : ClassTag]
+  extends OpEstimatorSpec[O, ModelType, EstimatorType] {
+  override def kryoRegistrator: Class[_ <: KryoRegistrator] = classOf[OpKryoRegistrator]
 }

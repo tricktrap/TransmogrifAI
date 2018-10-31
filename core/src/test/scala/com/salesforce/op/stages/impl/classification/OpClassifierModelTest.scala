@@ -34,9 +34,11 @@ import com.salesforce.op.features.types.{Prediction, RealNN}
 import com.salesforce.op.stages.sparkwrappers.specific.SparkModelConverter._
 import com.salesforce.op.test._
 import com.salesforce.op.testkit._
+import com.salesforce.op.utils.kryo.OpKryoRegistrator
 import ml.dmlc.xgboost4j.scala.spark.{OpXGBoost, OpXGBoostQuietLogging, XGBoostClassifier}
 import org.apache.spark.ml.classification._
 import org.apache.spark.ml.linalg.Vector
+import org.apache.spark.serializer.KryoRegistrator
 import org.apache.spark.sql.DataFrame
 import org.junit.runner.RunWith
 import org.scalactic.Equality
@@ -46,6 +48,8 @@ import org.scalatest.junit.JUnitRunner
 
 @RunWith(classOf[JUnitRunner])
 class OpClassifierModelTest extends FlatSpec with TestSparkContext with OpXGBoostQuietLogging {
+
+  override def kryoRegistrator: Class[_ <: KryoRegistrator] = classOf[OpKryoRegistrator]
 
   private val label = RandomIntegral.integrals(0, 2).limit(1000)
     .map{ v => RealNN(v.value.map(_.toDouble).getOrElse(0.0)) }

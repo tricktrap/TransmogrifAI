@@ -34,7 +34,9 @@ import java.io.File
 
 import com.salesforce.op.features.types._
 import com.salesforce.op.stages._
+import com.salesforce.op.utils.kryo.OpKryoRegistratorBase
 import org.apache.spark.ml.{Estimator, Model}
+import org.apache.spark.serializer.KryoRegistrator
 import org.apache.spark.sql.Dataset
 import org.scalactic.Equality
 import org.scalatest.events.{Event, TestFailed}

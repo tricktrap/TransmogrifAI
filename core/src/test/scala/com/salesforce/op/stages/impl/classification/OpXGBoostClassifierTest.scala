@@ -41,7 +41,7 @@ import org.scalatest.junit.JUnitRunner
 
 
 @RunWith(classOf[JUnitRunner])
-class OpXGBoostClassifierTest extends OpEstimatorSpec[Prediction, OpPredictorWrapperModel[XGBoostClassificationModel],
+class OpXGBoostClassifierTest extends OpEstimatorTest[Prediction, OpPredictorWrapperModel[XGBoostClassificationModel],
   OpPredictorWrapper[XGBoostClassifier, XGBoostClassificationModel]]
   with PredictionEquality with OpXGBoostQuietLogging {
 

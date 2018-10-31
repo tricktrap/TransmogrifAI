@@ -41,7 +41,7 @@ import org.scalatest.junit.JUnitRunner
 
 
 @RunWith(classOf[JUnitRunner])
-class OpGBTClassifierTest extends OpEstimatorSpec[Prediction, OpPredictorWrapperModel[GBTClassificationModel],
+class OpGBTClassifierTest extends OpEstimatorTest[Prediction, OpPredictorWrapperModel[GBTClassificationModel],
   OpPredictorWrapper[GBTClassifier, GBTClassificationModel]] with PredictionEquality {
 
   override def specName: String = Spec[OpGBTClassifier]

@@ -34,18 +34,18 @@ import com.salesforce.op.features.types._
 import com.salesforce.op.stages.impl.PredictionEquality
 import com.salesforce.op.stages.sparkwrappers.specific.{OpPredictorWrapper, OpPredictorWrapperModel}
 import com.salesforce.op.test.{OpEstimatorSpec, TestFeatureBuilder}
+import com.salesforce.op.utils.kryo.OpKryoRegistrator
 import org.apache.spark.ml.classification.{MultilayerPerceptronClassificationModel, MultilayerPerceptronClassifier}
 import org.apache.spark.ml.linalg.Vectors
+import org.apache.spark.serializer.KryoRegistrator
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 
 
 @RunWith(classOf[JUnitRunner])
-class OpMultilayerPerceptronClassifierTest extends OpEstimatorSpec[Prediction,
+class OpMultilayerPerceptronClassifierTest extends OpEstimatorTest[Prediction,
   OpPredictorWrapperModel[MultilayerPerceptronClassificationModel],
   OpPredictorWrapper[MultilayerPerceptronClassifier, MultilayerPerceptronClassificationModel]] with PredictionEquality {
-
-  spark
 
   override def specName: String = Spec[OpMultilayerPerceptronClassifier]
 

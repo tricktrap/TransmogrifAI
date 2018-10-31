@@ -42,7 +42,7 @@ trait TestSparkContext extends TempDirectoryTest with TestCommon {
 
   // loggingLevel(Level.INFO)
 
-  final protected val KryoRegistratorKey: String = "spark.kryo.registrator"
+  // final protected val KryoRegistratorKey: String = "spark.kryo.registrator"
 
   def kryoRegistrator: Class[_ <: KryoRegistrator] = classOf[OpKryoRegistratorBase]
 
@@ -58,7 +58,7 @@ trait TestSparkContext extends TempDirectoryTest with TestCommon {
       .setAppName(conf.get("spark.app.name", "op-test"))
       .registerKryoClasses(kryoClasses)
       .set("spark.serializer", classOf[org.apache.spark.serializer.KryoSerializer].getName)
-      .set(KryoRegistratorKey, kryoRegistrator.getCanonicalName)
+      .set("spark.kryo.registrator", kryoRegistrator.getCanonicalName)
       .set("spark.ui.enabled", false.toString) // Disables Spark Application UI
       .set("spark.kryo.registrationRequired", "true") // Enable to debug Kryo
     // .set("spark.kryo.unsafe", "true") // This might improve performance

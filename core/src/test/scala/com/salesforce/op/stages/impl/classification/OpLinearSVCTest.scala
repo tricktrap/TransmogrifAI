@@ -41,7 +41,7 @@ import org.scalatest.junit.JUnitRunner
 
 
 @RunWith(classOf[JUnitRunner])
-class OpLinearSVCTest extends OpEstimatorSpec[Prediction, OpPredictorWrapperModel[LinearSVCModel],
+class OpLinearSVCTest extends OpEstimatorTest[Prediction, OpPredictorWrapperModel[LinearSVCModel],
   OpPredictorWrapper[LinearSVC, LinearSVCModel]] with PredictionEquality {
 
   override def specName: String = Spec[OpLinearSVC]

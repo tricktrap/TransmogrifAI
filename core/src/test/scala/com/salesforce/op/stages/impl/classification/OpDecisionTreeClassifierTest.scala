@@ -41,7 +41,7 @@ import org.scalatest.junit.JUnitRunner
 
 
 @RunWith(classOf[JUnitRunner])
-class OpDecisionTreeClassifierTest extends OpEstimatorSpec[Prediction,
+class OpDecisionTreeClassifierTest extends OpEstimatorTest[Prediction,
   OpPredictorWrapperModel[DecisionTreeClassificationModel],
   OpPredictorWrapper[DecisionTreeClassifier, DecisionTreeClassificationModel]] with PredictionEquality {
 

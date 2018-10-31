@@ -41,7 +41,7 @@ import org.scalatest.junit.JUnitRunner
 
 @RunWith(classOf[JUnitRunner])
 class OpRandomForestClassifierTest extends
-  OpEstimatorSpec[Prediction, OpPredictorWrapperModel[RandomForestClassificationModel],
+  OpEstimatorTest[Prediction, OpPredictorWrapperModel[RandomForestClassificationModel],
     OpPredictorWrapper[RandomForestClassifier, RandomForestClassificationModel]] with PredictionEquality {
 
   override def specName: String = Spec[OpRandomForestClassifier]

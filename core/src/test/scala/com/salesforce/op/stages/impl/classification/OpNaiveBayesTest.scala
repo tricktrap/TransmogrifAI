@@ -41,7 +41,7 @@ import org.scalatest.junit.JUnitRunner
 
 
 @RunWith(classOf[JUnitRunner])
-class OpNaiveBayesTest extends OpEstimatorSpec[Prediction, OpPredictorWrapperModel[NaiveBayesModel],
+class OpNaiveBayesTest extends OpEstimatorTest[Prediction, OpPredictorWrapperModel[NaiveBayesModel],
   OpPredictorWrapper[NaiveBayes, NaiveBayesModel]] with PredictionEquality {
 
   override def specName: String = Spec[OpNaiveBayes]

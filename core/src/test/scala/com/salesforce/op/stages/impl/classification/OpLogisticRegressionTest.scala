@@ -41,7 +41,7 @@ import org.scalatest.junit.JUnitRunner
 
 
 @RunWith(classOf[JUnitRunner])
-class OpLogisticRegressionTest extends OpEstimatorSpec[Prediction, OpPredictorWrapperModel[LogisticRegressionModel],
+class OpLogisticRegressionTest extends OpEstimatorTest[Prediction, OpPredictorWrapperModel[LogisticRegressionModel],
   OpPredictorWrapper[LogisticRegression, LogisticRegressionModel]] with PredictionEquality {
 
   override def specName: String = Spec[OpLogisticRegression]
