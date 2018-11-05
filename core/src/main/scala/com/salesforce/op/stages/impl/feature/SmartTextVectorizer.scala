@@ -32,19 +32,21 @@ package com.salesforce.op.stages.impl.feature
 
 import com.salesforce.op.UID
 import com.salesforce.op.features.TransientFeature
-import com.salesforce.op.features.types.{OPVector, Text, TextList, VectorConversions}
+import com.salesforce.op.features.types.{OPVector, Text, TextList, VectorConversions, OptStringConversions}
 import com.salesforce.op.stages.base.sequence.{SequenceEstimator, SequenceModel}
 import com.salesforce.op.stages.impl.feature.VectorizerUtils._
 import com.salesforce.op.utils.json.JsonLike
 import com.salesforce.op.utils.spark.RichDataset._
-import com.salesforce.op.utils.spark.{OpVectorColumnMetadata, OpVectorMetadata}
+import com.salesforce.op.utils.spark.SequenceAggregators.Ya
+import com.salesforce.op.utils.spark.{OpVectorColumnMetadata, OpVectorMetadata, SequenceAggregators}
 import com.twitter.algebird.Monoid._
 import com.twitter.algebird.Operators._
 import com.twitter.algebird.Semigroup
 import org.apache.spark.ml.param._
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
-import org.apache.spark.sql.{Dataset, Encoder}
+import org.apache.spark.sql.{Dataset, Encoder, Encoders}
 
+import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
 import scala.reflect.runtime.universe.TypeTag
 
@@ -95,12 +97,62 @@ class SmartTextVectorizer[T <: Text](uid: String = UID[SmartTextVectorizer[T]])(
       isCategorical -> topValues
     }.unzip
 
+    implicit val encoder = Encoders.kryo[Seq[Text]]
+
+    val textData = dataset.map(_.zip(isCategorical).filter(!_._2).map(t =>
+      t._1.map(cleanTextFn(_, shouldCleanText)).toText))
+
+    implicit val txtListEncoder = Encoders.kryo[Seq[TextList]]
+    val tokenized = textData.map(_.map(tokenize(_).tokens))
+    val features = getTransientFeatures()
+    val params = makeHashingParams()
+    val hasher = hashingTF(params)
+    implicit val YaEncoder = Encoders.kryo[Ya]
+    val hashed: Dataset[Ya] = tokenized.map { in =>
+      if (in.isEmpty) Seq.empty else {
+        val fNameHashesWithInputs = features.map(f => hasher.indexOf(f.name)).zip(in)
+        val h: Ya = if (isSharedHashSpace(params)) {
+          val allElements = ArrayBuffer.empty[Any]
+          for {
+            (featureNameHash, el) <- fNameHashesWithInputs
+            prepared = prepare[TextList](el, params.hashWithIndex, params.prependFeatureName, featureNameHash)
+            p <- prepared
+          } allElements.append(p)
+          if (allElements.isEmpty) {
+            Seq(Map.empty)
+          }
+          else {
+            Seq(allElements.map(e => Map(hasher.indexOf(e) -> Map(e.toString -> 1L))).reduce(_ + _))
+          }
+        } else {
+          fNameHashesWithInputs.map { case (featureNameHash, el) =>
+            prepare[TextList](el, params.hashWithIndex, params.prependFeatureName, featureNameHash)
+          }.map(_.flatMap(e => Seq(hasher.indexOf(e) -> Map(e.toString -> 1L))).toMap)
+        }
+        h
+      }
+    }
+    val size = if (isSharedHashSpace(params)) 1 else inN.length
+    val sumAggr = SequenceAggregators.SumYa(size = inN.length)
+
+    val countOccurrences: Ya = hashed.as[Ya].select(sumAggr.toColumn).first()
+
+    val topHashes = countOccurrences.map {
+      _.map { case (k, v) => k ->
+        v.toArray
+          .sortBy(v => -v._2 -> v._1)
+          .take(10)
+          .map(_._1)
+      }.toSeq
+    }
+
     val smartTextParams = SmartTextVectorizerModelArgs(
       isCategorical = isCategorical,
       topValues = topValues,
       shouldCleanText = shouldCleanText,
       shouldTrackNulls = $(trackNulls),
-      hashingParams = makeHashingParams()
+      hashingParams = params,
+      topHashes = Option(topHashes)
     )
 
     val vecMetadata = makeVectorMetadata(smartTextParams)
@@ -136,7 +188,9 @@ class SmartTextVectorizer[T <: Text](uid: String = UID[SmartTextVectorizer[T]])(
       makeVectorColumnMetadata(shouldTrackNulls, unseen, smartTextParams.categoricalTopValues, categoricalFeatures)
     } else Array.empty[OpVectorColumnMetadata]
     val textColumns = if (textFeatures.nonEmpty) {
-      makeVectorColumnMetadata(textFeatures, makeHashingParams()) ++ textFeatures.map(_.toColumnMetaData(isNull = true))
+
+      makeVectorColumnMetadata(textFeatures, smartTextParams, makeHashingParams()) ++
+        textFeatures.map(_.toColumnMetaData(isNull = true))
     } else Array.empty[OpVectorColumnMetadata]
 
     val columns = categoricalColumns ++ textColumns
@@ -187,7 +241,8 @@ case class SmartTextVectorizerModelArgs
   topValues: Array[Seq[String]],
   shouldCleanText: Boolean,
   shouldTrackNulls: Boolean,
-  hashingParams: HashingFunctionParams
+  hashingParams: HashingFunctionParams,
+  topHashes: Option[Seq[Seq[(Int, Array[String])]]]
 ) extends JsonLike {
   def categoricalTopValues: Array[Seq[String]] =
     topValues.zip(isCategorical).collect { case (top, true) => top }
@@ -215,7 +270,6 @@ final class SmartTextVectorizerModel[T <: Text] private[op]
       val textTokens: Seq[TextList] = rowText.map(tokenize(_).tokens)
       val textVector: OPVector = hash[TextList](textTokens, getTextTransientFeatures, args.hashingParams)
       val textNullIndicatorsVector = if (args.shouldTrackNulls) Seq(getNullIndicatorsVector(textTokens)) else Seq.empty
-
       VectorsCombiner.combineOP(Seq(categoricalVector, textVector) ++ textNullIndicatorsVector)
     }
   }
@@ -240,7 +294,10 @@ trait MaxCardinalityParams extends Params {
     doc = "max number of distinct values a categorical feature can have",
     isValid = ParamValidators.inRange(lowerBound = 1, upperBound = SmartTextVectorizer.MaxCardinality)
   )
+
   final def setMaxCardinality(v: Int): this.type = set(maxCardinality, v)
+
   final def getMaxCardinality: Int = $(maxCardinality)
+
   setDefault(maxCardinality -> SmartTextVectorizer.MaxCardinality)
 }

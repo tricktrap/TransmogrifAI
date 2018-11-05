@@ -262,6 +262,7 @@ final class SmartTextMapVectorizerModel[T <: OPMap[String]] private[op]
     val categoricalVector = categoricalPivotFn(rowCategorical)
     val rowTextTokenized = rowText.map(_.value.map { case (k, v) => k -> tokenize(v.toText).tokens })
     val textVector = hash(rowTextTokenized, keysText, args.hashingParams)
+
     val textNullIndicatorsVector =
       if (args.shouldTrackNulls) Seq(getNullIndicatorsVector(keysText, rowTextTokenized)) else Nil
     VectorsCombiner.combineOP(Seq(categoricalVector, textVector) ++ textNullIndicatorsVector)

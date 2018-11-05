@@ -58,7 +58,7 @@ import scala.reflect.runtime.universe.TypeTag
 class OPCollectionHashingVectorizer[T <: OPCollection](uid: String = UID[OPCollectionHashingVectorizer[_]])
   (implicit tti: TypeTag[T], val ttvi: TypeTag[T#Value])
   extends SequenceTransformer[T, OPVector](operationName = "vecColHash", uid = uid)
-  with VectorizerDefaults with PivotParams with CleanTextFun with HashingFun with HashingVectorizerParams {
+    with VectorizerDefaults with PivotParams with CleanTextFun with HashingFun with HashingVectorizerParams {
 
   /**
    * Determine if the transformer should use a shared hash space for all features or not
@@ -105,39 +105,48 @@ private[op] trait HashingVectorizerParams extends Params {
       lowerInclusive = false, upperInclusive = true
     )
   )
+
   def setNumFeatures(v: Int): this.type = set(numFeatures, v)
+
   def getNumFeatures(): Int = $(numFeatures)
 
   final val hashWithIndex = new BooleanParam(
     parent = this, name = "hashWithIndex",
     doc = s"if true, include indices when hashing a feature that has them (OPLists or OPVectors)"
   )
+
   def setHashWithIndex(v: Boolean): this.type = set(hashWithIndex, v)
 
   final val hashSpaceStrategy: Param[String] = new Param[String](this, "hashSpaceStrategy",
     "Strategy to determine whether to use shared or separate hash space for input text features",
     (value: String) => HashSpaceStrategy.withNameInsensitiveOption(value).isDefined
   )
+
   def setHashSpaceStrategy(v: HashSpaceStrategy): this.type = set(hashSpaceStrategy, v.entryName)
+
   def getHashSpaceStrategy: HashSpaceStrategy = HashSpaceStrategy.withNameInsensitive($(hashSpaceStrategy))
 
   final val prependFeatureName = new BooleanParam(
     parent = this, name = "prependFeatureName",
     doc = s"if true, prepends a input feature name to each token of that feature"
   )
+
   def setPrependFeatureName(v: Boolean): this.type = set(prependFeatureName, v)
 
   final val hashAlgorithm = new Param[String](
     parent = this, name = "hashAlgorithm", doc = s"hash algorithm to use",
     isValid = (s: String) => HashAlgorithm.withNameInsensitiveOption(s).isDefined
   )
+
   def setHashAlgorithm(h: HashAlgorithm): this.type = set(hashAlgorithm, h.toString.toLowerCase)
+
   def getHashAlgorithm: HashAlgorithm = HashAlgorithm.withNameInsensitive($(hashAlgorithm))
 
   final val binaryFreq = new BooleanParam(
     parent = this, name = "binaryFreq",
     doc = "if true, term frequency vector will be binary such that non-zero term counts will be set to 1.0"
   )
+
   def setBinaryFreq(v: Boolean): this.type = set(binaryFreq, v)
 
   setDefault(
@@ -154,15 +163,15 @@ private[op] trait HashingVectorizerParams extends Params {
 /**
  * Hashing Parameters
  *
- * @param hashWithIndex        if true, include indices when hashing a feature that has them (OPLists or OPVectors)
- * @param prependFeatureName   if true, prepends a input feature name to each token of that feature
- * @param numFeatures          number of features (hashes) to generate
- * @param numInputs            number of inputs
- * @param maxNumOfFeatures     max number of features (hashes)
- * @param binaryFreq           if true, term frequency vector will be binary such that non-zero term counts
- *                             will be set to 1.0
- * @param hashAlgorithm        hash algorithm to use
- * @param hashSpaceStrategy    strategy to determine whether to use shared hash space for all included features
+ * @param hashWithIndex      if true, include indices when hashing a feature that has them (OPLists or OPVectors)
+ * @param prependFeatureName if true, prepends a input feature name to each token of that feature
+ * @param numFeatures        number of features (hashes) to generate
+ * @param numInputs          number of inputs
+ * @param maxNumOfFeatures   max number of features (hashes)
+ * @param binaryFreq         if true, term frequency vector will be binary such that non-zero term counts
+ *                           will be set to 1.0
+ * @param hashAlgorithm      hash algorithm to use
+ * @param hashSpaceStrategy  strategy to determine whether to use shared hash space for all included features
  */
 case class HashingFunctionParams
 (
@@ -205,6 +214,39 @@ private[op] trait HashingFun {
       .setBinary(params.binaryFreq)
       .setHashAlgorithm(params.hashAlgorithm.toString.toLowerCase)
   }
+
+  protected def makeVectorColumnMetadata(
+    features: Array[TransientFeature], args: SmartTextVectorizerModelArgs, params: HashingFunctionParams
+  ): Array[OpVectorColumnMetadata] = {
+    val numFeatures = params.numFeatures
+    val top = args.topHashes
+    if (isSharedHashSpace(params)) {
+      val allNames = features.map(_.name)
+      (0 until numFeatures).map { i =>
+        val topHashes = top.map(_.flatMap(_.toMap[Int, Array[String]].getOrElse(i, Array.empty)).mkString(","))
+        OpVectorColumnMetadata(
+          parentFeatureName = features.map(_.name),
+          parentFeatureType = features.map(_.typeName),
+          grouping = None,
+          descriptorValue = topHashes
+        )
+      }.toArray
+    } else {
+      (for {
+        j <- 0 until features.length
+        i <- 0 until numFeatures
+      } yield {
+        val f = features(j)
+        val topHashes = top.map(_ (j).toMap[Int, Array[String]].getOrElse(i, Array.empty).mkString(","))
+        new OpVectorColumnMetadata(
+          parentFeatureName = Seq(f.name),
+          parentFeatureType = Seq(f.typeName),
+          grouping = None,
+          descriptorValue = topHashes)
+      }).toArray
+    }
+  }
+
 
   protected def makeVectorColumnMetadata(
     features: Array[TransientFeature], params: HashingFunctionParams
@@ -354,8 +396,8 @@ private[op] trait MapHashingFun extends HashingFun {
     if (inputs.isEmpty) OPVector.empty
     else {
       val hasher = hashingTF(params)
-      val fNameHashesWithInputsSeq = allKeys.zip(inputs).map{ case (featureKeys, input) =>
-        featureKeys.map{ key =>
+      val fNameHashesWithInputsSeq = allKeys.zip(inputs).map { case (featureKeys, input) =>
+        featureKeys.map { key =>
           val featureHash = hasher.indexOf(key)
           featureHash -> input.getOrElse(key, TextList.empty)
         }
@@ -364,7 +406,7 @@ private[op] trait MapHashingFun extends HashingFun {
       val numFeatures = allKeys.map(_.length).sum
       if (isSharedHashSpace(params, Some(numFeatures))) {
         val allElements = ArrayBuffer.empty[Any]
-        for{
+        for {
           fNameHashesWithInputs <- fNameHashesWithInputsSeq
           (featureNameHash, values) <- fNameHashesWithInputs
           prepared = prepare[TextList](values, params.hashWithIndex, params.prependFeatureName, featureNameHash)

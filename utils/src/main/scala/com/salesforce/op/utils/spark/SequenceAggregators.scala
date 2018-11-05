@@ -153,6 +153,20 @@ object SequenceAggregators {
 
   type SeqSet = Seq[Set[String]]
 
+
+  type Ya = Seq[Map[Int, Map[String, Long]]]
+
+  def SumYa(size: Int): Aggregator[Ya, Ya, Ya] = {
+    new Aggregator[Ya, Ya, Ya] {
+      val zero: Ya = Seq.fill(size)(Map.empty[Int, Map[String, Long]])
+      def reduce(b: Ya, a: Ya): Ya = b.zip(a).map { case (m1, m2) => m1 + m2 }
+      def merge(b: Ya, a: Ya): Ya = reduce(b, a)
+      def finish(reduction: Ya): Ya = reduction
+      def bufferEncoder: Encoder[Ya] = Encoders.kryo[Ya]
+      def outputEncoder: Encoder[Ya] = Encoders.kryo[Ya]
+    }
+  }
+
   /**
    * Creates a TypedColumn that sums a Dataset column of type Seq[Set[String]]
    *

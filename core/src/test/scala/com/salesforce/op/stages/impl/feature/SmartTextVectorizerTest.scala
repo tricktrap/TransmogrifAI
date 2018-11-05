@@ -83,6 +83,7 @@ class SmartTextVectorizerTest
       .setResultFeatures(smartVectorized, categoricalVectorized, textVectorized, nullIndicator).transform(inputData)
     val result = transformed.collect(smartVectorized, categoricalVectorized, textVectorized, nullIndicator)
     val field = transformed.schema(smartVectorized.name)
+    println(OpVectorMetadata.apply(field).columns.map(_.makeColName()).toSeq)
     assertNominal(field, Array.fill(4)(true) ++ Array.fill(4)(false) :+ true, transformed.collect(smartVectorized))
     val fieldCategorical = transformed.schema(categoricalVectorized.name)
     val catRes = transformed.collect(categoricalVectorized)
@@ -135,6 +136,36 @@ class SmartTextVectorizerTest
     val result = transformed.collect(smartVectorized, textVectorized, nullIndicator)
     val field = transformed.schema(smartVectorized.name)
     assertNominal(field, Array.fill(8)(false) ++ Array(true, true), transformed.collect(smartVectorized))
+    val fieldText = transformed.schema(textVectorized.name)
+    val textRes = transformed.collect(textVectorized)
+    println(OpVectorMetadata(field).columns.map(_.makeColName()).toSeq)
+
+    assertNominal(fieldText, Array.fill(textRes.head.value.size)(false), textRes)
+    val (smart, expected) = result.map { case (smartVector, textVector, nullVector) =>
+      val combined = VectorsCombiner.combineOP(Seq(textVector, nullVector))
+      smartVector -> combined
+    }.unzip
+
+    smart shouldBe expected
+  }
+
+  it should "detect two non categorical text features with Shared Hash space" in {
+    val smartVectorized = new SmartTextVectorizer().setHashSpaceStrategy(HashSpaceStrategy.Shared)
+      .setMaxCardinality(1).setNumFeatures(4).setMinSupport(1).setTopK(2).setPrependFeatureName(false)
+      .setInput(f1, f2).getOutput()
+
+    val f1Tokenized = new TextTokenizer[Text]().setInput(f1).getOutput()
+    val f2Tokenized = new TextTokenizer[Text]().setInput(f2).getOutput()
+    val textVectorized = new OPCollectionHashingVectorizer[TextList]().setHashSpaceStrategy(HashSpaceStrategy.Shared)
+      .setNumFeatures(4).setPrependFeatureName(false).setInput(f1Tokenized, f2Tokenized).getOutput()
+    val nullIndicator = new TextListNullTransformer[TextList]().setInput(f1Tokenized, f2Tokenized).getOutput()
+
+    val transformed = new OpWorkflow()
+      .setResultFeatures(smartVectorized, textVectorized, nullIndicator).transform(inputData)
+    val result = transformed.collect(smartVectorized, textVectorized, nullIndicator)
+    val field = transformed.schema(smartVectorized.name)
+    println(OpVectorMetadata(field).columns.map(_.makeColName()).toSeq)
+    // assertNominal(field, Array.fill(8)(false) ++ Array(true, true), transformed.collect(smartVectorized))
     val fieldText = transformed.schema(textVectorized.name)
     val textRes = transformed.collect(textVectorized)
     assertNominal(fieldText, Array.fill(textRes.head.value.size)(false), textRes)
