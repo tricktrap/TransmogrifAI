@@ -110,15 +110,17 @@ class RecordInsightsLOCO[T <: Model[T]]
       val (oldInd, oldVal) = featureArray(i)
       val parentType = columns(i).parentFeatureType
 
-      if (parentType.contains(Seq(FeatureType.typeName[Binary], FeatureType.typeName[BinaryMap]))) {
-        featureArray.update(i, (oldInd, 1 - oldVal))
-      } else {
-        featureArray.update(i, (oldInd, 0))
-      }
+      println(s"Old Value is $oldVal for feature ${columns(i).makeColName()}" )
+//      if (parentType.contains(Seq(FeatureType.typeName[Binary], FeatureType.typeName[BinaryMap]))) {
+//        featureArray.update(i, (oldInd, 1 - oldVal))
+//      } else {
+//        featureArray.update(i, (oldInd, 0))
+//      }
 
 
 
-      // featureArray.update(i, (oldInd, 0))
+
+      featureArray.update(i, (oldInd, 0))
       val score = modelApply(labelDummy, OPVector(Vectors.sparse(featureSize, featureArray))).score
       val diffs = baseScore.zip(score).map { case (b, s) => b - s }
       val max = if (isSet(ind)) diffs($(ind)) else diffs.maxBy(math.abs)
@@ -129,7 +131,7 @@ class RecordInsightsLOCO[T <: Model[T]]
     }
 
     val top = maxHeap.dequeueAll
-    top.map { case (k, _, v) =>
+    top.sortBy(_._2).map { case (k, _, v) =>
       val info = featureInfo(k)
       val value = RecordInsightsParser.insightToText(info.toJson(false), v)._2
       info.columnName -> value
