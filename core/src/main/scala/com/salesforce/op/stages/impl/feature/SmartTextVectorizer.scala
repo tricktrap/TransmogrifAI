@@ -100,7 +100,7 @@ class SmartTextVectorizer[T <: Text](uid: String = UID[SmartTextVectorizer[T]])(
     implicit val encoder = Encoders.kryo[Seq[Text]]
 
     val textData = dataset.map(_.zip(isCategorical).filter(!_._2).map(t =>
-      t._1.map(cleanTextFn(_, shouldCleanText)).toText))
+      t._1.map(cleanTextFn(_, false)).toText))
 
     implicit val txtListEncoder = Encoders.kryo[Seq[TextList]]
     val tokenized = textData.map(_.map(tokenize(_).tokens))
