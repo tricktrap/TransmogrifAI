@@ -110,7 +110,7 @@ class RecordInsightsLOCO[T <: Model[T]]
       val (oldInd, oldVal) = featureArray(i)
       val parentType = columns(i).parentFeatureType
 
-      println(s"Old Value is $oldVal for feature ${columns(oldInd)}" )
+//      println(s"Old Value is $oldVal for feature ${columns(oldInd)}" )
 //      if (parentType.contains(Seq(FeatureType.typeName[Binary], FeatureType.typeName[BinaryMap]))) {
 //        featureArray.update(i, (oldInd, 1 - oldVal))
 //      } else {
