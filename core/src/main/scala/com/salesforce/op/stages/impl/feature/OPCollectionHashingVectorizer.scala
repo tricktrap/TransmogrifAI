@@ -387,6 +387,53 @@ private[op] trait MapHashingFun extends HashingFun {
     hashColumns ++ nullColumns
   }
 
+
+  protected def makeVectorColumnMetadata
+  (
+    features: Array[TransientFeature], params: HashingFunctionParams,
+    allKeys: Seq[Seq[String]], shouldTrackNulls: Boolean, topHashes: Option[Seq[Seq[(Int, Array[String])]]]
+  ): Array[OpVectorColumnMetadata] = {
+    val numHashes = params.numFeatures
+    val numFeatures = allKeys.map(_.length).sum
+    val hashColumns =
+      if (isSharedHashSpace(params, Some(numFeatures))) {
+
+        (0 until numHashes).map { i =>
+          val top = topHashes.map(_.flatMap(_.toMap[Int, Array[String]].getOrElse(i, Array.empty)).mkString(","))
+
+          OpVectorColumnMetadata(
+            parentFeatureName = features.map(_.name),
+            parentFeatureType = features.map(_.typeName),
+            grouping = None,
+            indicatorValue = None,
+            descriptorValue = top
+          )
+        }.toArray
+      } else {
+        (for {
+          ((keys, f), j) <- allKeys.toArray.zip(features).zipWithIndex
+          key <- keys
+          i <- 0 until numHashes
+        } yield{
+
+        val top = topHashes.map(_ (j).toMap[Int, Array[String]].getOrElse(i, Array.empty).mkString(","))
+        new OpVectorColumnMetadata(
+          parentFeatureName = Seq(f.name),
+          parentFeatureType = Seq(f.typeName),
+          grouping = Option(key),
+          descriptorValue = top)
+
+      })}
+    val nullColumns = if (shouldTrackNulls) {
+      for {
+        (keys, f) <- allKeys.toArray.zip(features)
+        key <- keys
+      } yield f.toColumnMetaData(isNull = true).copy(grouping = Option(key))
+    } else Array.empty[OpVectorColumnMetadata]
+
+    hashColumns ++ nullColumns
+  }
+
   protected def hash
   (
     inputs: Seq[Map[String, TextList]],

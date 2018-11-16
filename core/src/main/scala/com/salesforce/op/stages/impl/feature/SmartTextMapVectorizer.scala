@@ -36,14 +36,16 @@ import com.salesforce.op.stages.base.sequence.{SequenceEstimator, SequenceModel}
 import com.salesforce.op.stages.impl.feature.VectorizerUtils._
 import com.salesforce.op.utils.json.JsonLike
 import com.salesforce.op.utils.spark.RichDataset._
-import com.salesforce.op.utils.spark.{OpVectorColumnMetadata, OpVectorMetadata}
+import com.salesforce.op.utils.spark.SequenceAggregators.Ya
+import com.salesforce.op.utils.spark.{OpVectorColumnMetadata, OpVectorMetadata, SequenceAggregators}
 import com.twitter.algebird.Monoid._
 import com.twitter.algebird.Operators._
 import com.twitter.algebird.Semigroup
 import com.twitter.algebird.macros.caseclass
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
-import org.apache.spark.sql.{Dataset, Encoder}
+import org.apache.spark.sql.{Dataset, Encoder, Encoders}
 
+import scala.collection.mutable.ArrayBuffer
 import scala.reflect.runtime.universe.TypeTag
 
 /**
@@ -71,7 +73,7 @@ class SmartTextMapVectorizer[T <: OPMap[String]]
   (
     textMap: T#Value, shouldCleanKeys: Boolean, shouldCleanValues: Boolean
   ): TextMapStats = {
-    val keyValueCounts = textMap.map{ case (k, v) =>
+    val keyValueCounts = textMap.map { case (k, v) =>
       cleanTextFn(k, shouldCleanKeys) -> TextStats(Map(cleanTextFn(v, shouldCleanValues) -> 1))
     }
     TextMapStats(keyValueCounts)
@@ -88,10 +90,11 @@ class SmartTextMapVectorizer[T <: OPMap[String]]
     hashSpaceStrategy = getHashSpaceStrategy
   )
 
-  private def makeVectorMetadata(args: SmartTextMapVectorizerModelArgs): OpVectorMetadata = {
+  private def makeVectorMetadata(args: SmartTextMapVectorizerModelArgs, topHashes:
+  Option[Seq[Seq[(Int, Array[String])]]] = None): OpVectorMetadata = {
     val categoricalColumns = if (args.categoricalFeatureInfo.flatten.nonEmpty) {
       val (mapFeatures, mapFeatureInfo) =
-        inN.toSeq.zip(args.categoricalFeatureInfo).filter{ case (tf, featureInfoSeq) => featureInfoSeq.nonEmpty }.unzip
+        inN.toSeq.zip(args.categoricalFeatureInfo).filter { case (tf, featureInfoSeq) => featureInfoSeq.nonEmpty }.unzip
       val topValues = mapFeatureInfo.map(featureInfoSeq =>
         featureInfoSeq.map(featureInfo => featureInfo.key -> featureInfo.topValues)
       )
@@ -105,13 +108,14 @@ class SmartTextMapVectorizer[T <: OPMap[String]]
 
     val textColumns = if (args.textFeatureInfo.flatten.nonEmpty) {
       val (mapFeatures, mapFeatureInfo) =
-        inN.toSeq.zip(args.textFeatureInfo).filter{ case (tf, featureInfoSeq) => featureInfoSeq.nonEmpty }.unzip
+        inN.toSeq.zip(args.textFeatureInfo).filter { case (tf, featureInfoSeq) => featureInfoSeq.nonEmpty }.unzip
       val allKeys = mapFeatureInfo.map(_.map(_.key))
       makeVectorColumnMetadata(
         features = mapFeatures.toArray,
         params = makeHashingParams(),
         allKeys = allKeys,
-        shouldTrackNulls = args.shouldTrackNulls
+        shouldTrackNulls = args.shouldTrackNulls,
+        topHashes = topHashes
       )
     } else Array.empty[OpVectorColumnMetadata]
 
@@ -163,7 +167,82 @@ class SmartTextMapVectorizer[T <: OPMap[String]]
 
     val smartTextMapVectorizerModelArgs = makeSmartTextMapVectorizerModelArgs(aggregatedStats)
 
-    val vecMetadata = makeVectorMetadata(smartTextMapVectorizerModelArgs)
+    implicit val encoder = Encoders.kryo[List[TextMap]]
+
+    val textKeys = smartTextMapVectorizerModelArgs.textKeys
+    val textData = dataset.map(_.view.zip(textKeys).collect { case (elements, keys) if keys.nonEmpty =>
+      val filtered = elements.filter { case (k, v) => keys.contains(k) }
+      (TextMap(filtered), keys)
+    }.unzip._1.toList
+    )
+    println(textData.collect().toSeq)
+    implicit val tokenEncoder = Encoders.kryo[List[Map[String, TextList]]]
+
+    val tokenized = textData.map(_.map(_.value.map { case (k, v) => k -> tokenize(v.toText).tokens }))
+    // println(tokenized.collect().toSeq)
+
+    val inputs = getTransientFeatures()
+    val params = makeHashingParams()
+    val hasher = hashingTF(params)
+    implicit val yaEncoder = Encoders.kryo[Ya]
+    val hashed = tokenized.map(in =>
+      if (in.isEmpty) Seq.empty[Map[Int, Map[String, Long]]]
+      else {
+        val fNameHashesWithInputsSeq = textKeys.zip(in).map { case (featureKeys, input) =>
+          featureKeys.map { key =>
+            val featureHash = hasher.indexOf(key)
+            featureHash -> input.getOrElse(key, TextList.empty)
+          }
+        }
+        val numFeatures = textKeys.map(_.length).sum
+        val h: Seq[Map[Int, Map[String, Long]]] = if (isSharedHashSpace(params, Some(numFeatures))) {
+          val allElements = ArrayBuffer.empty[Any]
+          for {
+            fNameHashesWithInputs <- fNameHashesWithInputsSeq
+            (featureNameHash, values) <- fNameHashesWithInputs
+            prepared = prepare[TextList](values, params.hashWithIndex, params.prependFeatureName, featureNameHash)
+            p <- prepared
+          } allElements.append(p)
+          if (allElements.isEmpty) {
+            Seq(Map.empty)
+          }
+          else {
+            // println(s"all elements $allElements")
+            val b = Seq(allElements.map(e => Map(hasher.indexOf(e) -> Map(e.toString -> 1L))).reduce(_ + _))
+            // println(s"b : $b")
+            b
+          }
+        } else {
+          val a = fNameHashesWithInputsSeq.map(_.map { case (featureNameHash, el) =>
+            prepare[TextList](el, params.hashWithIndex, params.prependFeatureName, featureNameHash)
+          }
+          )
+          // println(a)
+          a.flatMap(_.map(_.flatMap(e => Seq(hasher.indexOf(e) -> Map(e.toString -> 1L))).toMap))
+        }
+        h
+      }
+    )
+
+    println(s"hashed ${hashed.collect().toSeq}")
+    val size = if (isSharedHashSpace(params)) 1 else inN.length
+    val sumAggr = SequenceAggregators.SumYa(size = inN.length)
+
+    val countOccurrences: Ya = hashed.as[Ya].select(sumAggr.toColumn).first()
+
+    println(s"count ${countOccurrences}")
+    val topHashes = countOccurrences.map {
+      _.map { case (k, v) => k ->
+        v.toArray
+          .sortBy(v => -v._2 -> v._1)
+          .take(10)
+          .map(_._1)
+      }.toSeq
+    }
+
+    println(s"top ${topHashes.map(_.map{ case (k,v) => (k, v.toSeq)})}")
+
+    val vecMetadata = makeVectorMetadata(smartTextMapVectorizerModelArgs, Option(topHashes))
     setMetadata(vecMetadata.toMetadata)
 
     new SmartTextMapVectorizerModel[T](args = smartTextMapVectorizerModelArgs, operationName = operationName, uid = uid)
@@ -171,7 +250,8 @@ class SmartTextMapVectorizer[T <: OPMap[String]]
       .setAutoDetectThreshold(getAutoDetectThreshold)
       .setDefaultLanguage(getDefaultLanguage)
       .setMinTokenLength(getMinTokenLength)
-      .setToLowercase(getToLowercase)  }
+      .setToLowercase(getToLowercase)
+  }
 }
 
 /**
@@ -203,7 +283,7 @@ case class SmartTextFeatureInfo(key: String, isCategorical: Boolean, topValues: 
 /**
  * Arguments for [[SmartTextMapVectorizerModel]]
  *
- * @param allFeatureInfo       info about each feature with each text map
+ * @param allFeatureInfo    info about each feature with each text map
  * @param shouldCleanKeys   should clean feature keys
  * @param shouldCleanValues should clean feature values
  * @param shouldTrackNulls  should track nulls
@@ -217,8 +297,10 @@ case class SmartTextMapVectorizerModelArgs
   shouldTrackNulls: Boolean,
   hashingParams: HashingFunctionParams
 ) extends JsonLike {
-  val (categoricalFeatureInfo, textFeatureInfo) = allFeatureInfo.map{ featureInfoSeq =>
-    featureInfoSeq.partition{_ .isCategorical }
+  val (categoricalFeatureInfo, textFeatureInfo) = allFeatureInfo.map { featureInfoSeq =>
+    featureInfoSeq.partition {
+      _.isCategorical
+    }
   }.unzip
   val categoricalKeys = categoricalFeatureInfo.map(featureInfoSeq => featureInfoSeq.map(_.key))
   val textKeys = textFeatureInfo.map(featureInfoSeq => featureInfoSeq.map(_.key))
@@ -269,8 +351,8 @@ final class SmartTextMapVectorizerModel[T <: OPMap[String]] private[op]
   }
 
   private def getNullIndicatorsVector(keysSeq: Seq[Seq[String]], inputs: Seq[Map[String, TextList]]): OPVector = {
-    val nullIndicators = keysSeq.zip(inputs).flatMap{ case (keys, input) =>
-      keys.map{ k =>
+    val nullIndicators = keysSeq.zip(inputs).flatMap { case (keys, input) =>
+      keys.map { k =>
         val nullVal = if (input.get(k).forall(_.isEmpty)) 1.0 else 0.0
         Seq(0 -> nullVal)
       }
