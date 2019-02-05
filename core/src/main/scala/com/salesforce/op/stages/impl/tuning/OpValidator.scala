@@ -221,9 +221,8 @@ private[op] trait OpValidator[M <: Model[_], E <: Estimator[_]] extends Serializ
         )
       }
       case c: DataCutter => {
-        val labelCounts = dataset.sparkSession.createDataFrame(classes zip datasetsByClass.map(_.count())).persist
+        val labelCounts = dataset.sparkSession.createDataFrame(classes zip datasetsByClass.map(_.count()))
         c.estimate(labelCounts)
-        labelCounts.unpersist
       }
       case _ =>
     }

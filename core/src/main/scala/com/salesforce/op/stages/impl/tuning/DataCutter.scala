@@ -111,17 +111,19 @@ class DataCutter(uid: String = UID[DataCutter]) extends Splitter(uid = uid) with
   private[op] def estimate(labelCounts: DataFrame): (Set[Double], Set[Double]) = {
     val minLabelFract = getMinLabelFraction
     val maxLabels = getMaxLabelCategories
+    val maxDroppedLabelsRetained = getMaxDroppedLabelsRetained
 
     val colCount = labelCounts.columns(1)
     val totalValues = labelCounts.agg(sum(colCount)).first().getLong(0).toDouble
     val labelsOrderedByCount = labelCounts
       .filter(r => (r.getLong(1) / totalValues) >= minLabelFract)
       .sort(col(colCount).desc)
-      .limit(maxLabels + 2000)
+      .limit(maxLabels + maxDroppedLabelsRetained)
       .collect()
+
     val topLabels = labelsOrderedByCount.map(_.getDouble(0))
     val labelSet = topLabels.take(maxLabels).toSet
-    val topLabelsDropped = topLabels.slice(maxLabels, maxLabels + 2000).toSet
+    val topLabelsDropped = topLabels.slice(maxLabels, maxLabels + maxDroppedLabelsRetained).toSet
     if (labelSet.nonEmpty) {
       log.info(s"DataCutter is keeping labels: $labelSet and dropping labels: $topLabelsDropped")
     } else {
@@ -146,11 +148,19 @@ private[impl] trait DataCutterParams extends Params {
   )
   setDefault(maxLabelCategories, SplitterParamsDefault.MaxLabelCategoriesDefault)
 
+  final val maxDroppedLabelsRetained = new IntParam(this, "maxDroppedLabelsRetained",
+    "top labels that had to be dropped to protect against long tail of low cardinality labels",
+    ParamValidators.inRange(lowerBound = 2, upperBound = 1 << 30)
+  )
+  setDefault(maxDroppedLabelsRetained, SplitterParamsDefault.MaxLabelCategoriesDefault)
+
   def setMaxLabelCategories(value: Int): this.type = {
     set(maxLabelCategories, value)
   }
 
   def getMaxLabelCategories: Int = $(maxLabelCategories)
+
+  def getMaxDroppedLabelsRetained: Int = $(maxDroppedLabelsRetained)
 
   final val minLabelFraction = new DoubleParam(this, "minLabelFraction",
     "minimum fraction of the data a label category must have", ParamValidators.inRange(
