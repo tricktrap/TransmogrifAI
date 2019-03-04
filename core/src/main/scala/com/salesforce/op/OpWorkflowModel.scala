@@ -38,9 +38,9 @@ import com.salesforce.op.stages.{OPStage, OpPipelineStage, OpTransformer}
 import com.salesforce.op.utils.spark.RichDataset._
 import com.salesforce.op.utils.spark.RichMetadata._
 import com.salesforce.op.utils.stages.FitStagesUtil
-import org.apache.spark.sql.types.Metadata
+import org.apache.spark.sql.types.{LongType, Metadata, StructField, StructType}
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.{DataFrame, SparkSession}
+import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.json4s.JValue
 import org.json4s.JsonAST.{JField, JObject}
 import org.json4s.jackson.JsonMethods.{pretty, render}
@@ -96,6 +96,63 @@ class OpWorkflowModel(val uid: String = UID[OpWorkflowModel], val trainingParams
   }
 
   /**
+   * Used to generate dataframe from reader and raw features list
+   *
+   * @param nameToPermute name of column in dataframe to permute
+   * @return Dataframe with all the features generated + persisted
+   */
+  protected def generateRawDataAndPermute(nameToPermute: String)(implicit spark: SparkSession): DataFrame = {
+    require(reader.nonEmpty, "Data reader must be set")
+    require(rawFeatures.map(_.name).contains(nameToPermute),
+      s"raw features must contain requested feature to permute: $nameToPermute")
+
+    checkReadersAndFeatures()
+    val res = reader.get.generateDataFrame(rawFeatures, parameters)
+
+    // Save the original columns of the raw dataframe
+    val origColumns = res.columns
+    val keyName = "key"
+    val joinColName = "_permutation-joinId"
+    val permutedColName = "permuted" + nameToPermute
+
+    def addRowIndex(df: DataFrame) = spark.createDataFrame(
+      // Add index
+      df.rdd.zipWithIndex.map{case (r, i) => Row.fromSeq(r.toSeq :+ i)},
+      // Create schema
+      StructType(df.schema.fields :+ StructField(joinColName, LongType, false))
+    )
+
+    // Append a joinId to the dataframe
+    // val dfWithJoinKey = res.withColumn(joinColName, monotonically_increasing_id())
+    val dfWithJoinKey = addRowIndex(res)
+    println("dfWithJoinKey:")
+    dfWithJoinKey.show(10)
+    println("again:")
+    res.withColumn(joinColName, monotonically_increasing_id()).show(10)
+
+    // Select out a single column, permute it, and then append the same monotonically increasing id to be used as
+    // a join key
+    val singleColPermutedDf = addRowIndex(res
+      .select(nameToPermute)
+      .orderBy(rand)
+      .withColumnRenamed(nameToPermute, permutedColName)
+    )
+      //.withColumn(joinColName, monotonically_increasing_id())
+    println("singleColPermutedDf:")
+    singleColPermutedDf.show(10)
+
+    // Join the two dataframes together on the monotonically increasing id we just created, rename the column,
+    // and then put them back into the original ordering
+    val joinedDf = dfWithJoinKey
+      .join(singleColPermutedDf, Seq(joinColName), "inner")
+      .drop(nameToPermute)
+      .withColumnRenamed(permutedColName, nameToPermute)
+      .select(origColumns.head, origColumns.tail: _*)
+
+    joinedDf.persist() // don't want to redo this calculation
+  }
+
+  /**
    * Returns a dataframe containing all the columns generated up to and including the feature input
    *
    * @param feature input feature to compute up to
@@ -111,6 +168,28 @@ class OpWorkflowModel(val uid: String = UID[OpWorkflowModel], val trainingParams
       val fittedFeature = feature.copyWithNewStages(stages)
       val dag = FitStagesUtil.computeDAG(Array(fittedFeature))
       applyTransformationsDAG(generateRawData(), dag, persistEveryKStages)
+    }
+  }
+
+  /**
+   * Returns a dataframe containing all the columns generated up to and including the feature input
+   *
+   * @param feature input feature to compute up to
+   * @throws IllegalArgumentException if a feature is not part of this workflow
+   * @return Dataframe containing columns corresponding to all of the features generated up to the feature given
+   */
+  def computeDataUpToAndPermute(
+    feature: OPFeature,
+    persistEveryKStages: Int = OpWorkflowModel.PersistEveryKStages,
+    nameToPermute: String
+  )(implicit spark: SparkSession): DataFrame = {
+    if (findOriginStageId(feature).isEmpty) {
+      log.warn("Could not find origin stage for feature in workflow!! Defaulting to generate raw features.")
+      generateRawDataAndPermute(nameToPermute)
+    } else {
+      val fittedFeature = feature.copyWithNewStages(stages)
+      val dag = FitStagesUtil.computeDAG(Array(fittedFeature))
+      applyTransformationsDAG(generateRawDataAndPermute(nameToPermute), dag, persistEveryKStages)
     }
   }
 
