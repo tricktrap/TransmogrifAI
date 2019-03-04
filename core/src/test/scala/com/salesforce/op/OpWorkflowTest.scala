@@ -502,16 +502,12 @@ class OpWorkflowTest extends FlatSpec with PassengerSparkFixtureTest {
     val model = wf.train()
 
     val rawFeatNames = model.rawFeatures.map(_.name)
-    println(s"Raw features: ${rawFeatNames.toList}")
+    val originalDf = model.computeDataUpTo(weightNormed).orderBy("key")
+    val permutedDf = model.computeDataUpToAndPermute(weightNormed, nameToPermute = rawFeatNames.head).orderBy("key")
 
-    val originalDf = model.computeDataUpTo(weightNormed)
-    val permutedDf = model.computeDataUpToAndPermute(weightNormed, nameToPermute = rawFeatNames.head)
-
-    println(s"original dataframe:")
-    originalDf.show(10)
-
-    println(s"permuted dataframe:")
-    permutedDf.show(10)
+    originalDf.select("height").collect() should contain theSameElementsAs permutedDf.select("height").collect()
+    originalDf.select("height").collect() should not equal permutedDf.select("height").collect()
+    originalDf.select("weight").collect() shouldEqual permutedDf.select("weight").collect()
   }
 
 }

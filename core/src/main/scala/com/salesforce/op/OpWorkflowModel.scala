@@ -107,49 +107,38 @@ class OpWorkflowModel(val uid: String = UID[OpWorkflowModel], val trainingParams
       s"raw features must contain requested feature to permute: $nameToPermute")
 
     checkReadersAndFeatures()
-    val res = reader.get.generateDataFrame(rawFeatures, parameters)
+    val originalDf = reader.get.generateDataFrame(rawFeatures, parameters)
 
     // Save the original columns of the raw dataframe
-    val origColumns = res.columns
+    val originalColumns = originalDf.columns
     val keyName = "key"
     val joinColName = "_permutation-joinId"
     val permutedColName = "permuted" + nameToPermute
 
     def addRowIndex(df: DataFrame) = spark.createDataFrame(
-      // Add index
-      df.rdd.zipWithIndex.map{case (r, i) => Row.fromSeq(r.toSeq :+ i)},
-      // Create schema
-      StructType(df.schema.fields :+ StructField(joinColName, LongType, false))
+      df.rdd.zipWithIndex.map{case (r, i) => Row.fromSeq(r.toSeq :+ i)}, // Add index
+      StructType(df.schema.fields :+ StructField(joinColName, LongType, false)) // Create schema
     )
 
     // Append a joinId to the dataframe
-    // val dfWithJoinKey = res.withColumn(joinColName, monotonically_increasing_id())
-    val dfWithJoinKey = addRowIndex(res)
-    println("dfWithJoinKey:")
-    dfWithJoinKey.show(10)
-    println("again:")
-    res.withColumn(joinColName, monotonically_increasing_id()).show(10)
+    val dfWithJoinKey = addRowIndex(originalDf)
 
     // Select out a single column, permute it, and then append the same monotonically increasing id to be used as
     // a join key
-    val singleColPermutedDf = addRowIndex(res
+    val singleColPermutedDf = addRowIndex(originalDf
       .select(nameToPermute)
       .orderBy(rand)
       .withColumnRenamed(nameToPermute, permutedColName)
     )
-      //.withColumn(joinColName, monotonically_increasing_id())
-    println("singleColPermutedDf:")
-    singleColPermutedDf.show(10)
 
-    // Join the two dataframes together on the monotonically increasing id we just created, rename the column,
+    // Join the two dataframes together on the join id we just created, rename the column, drop the original one,
     // and then put them back into the original ordering
-    val joinedDf = dfWithJoinKey
+    dfWithJoinKey
       .join(singleColPermutedDf, Seq(joinColName), "inner")
       .drop(nameToPermute)
       .withColumnRenamed(permutedColName, nameToPermute)
-      .select(origColumns.head, origColumns.tail: _*)
-
-    joinedDf.persist() // don't want to redo this calculation
+      .select(originalColumns.head, originalColumns.tail: _*)
+      .persist() // don't want to redo this calculation
   }
 
   /**
