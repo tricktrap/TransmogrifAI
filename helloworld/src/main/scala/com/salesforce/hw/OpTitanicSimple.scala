@@ -39,6 +39,7 @@ import com.salesforce.op.stages.impl.classification.BinaryClassificationModelSel
 import com.salesforce.op.stages.impl.classification.BinaryClassificationModelsToTry
 import com.salesforce.op.stages.impl.classification.OpLogisticRegression
 import com.salesforce.op.stages.impl.tuning.DataSplitter
+import com.salesforce.op.testkit._
 
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
@@ -113,6 +114,20 @@ object OpTitanicSimple {
     val cabin = FeatureBuilder.PickList[Passenger].extract(_.cabin.map(_.toString).toPickList).asPredictor
     val embarked = FeatureBuilder.PickList[Passenger].extract(_.embarked.map(_.toString).toPickList).asPredictor
 
+    val randomPickListData = FeatureBuilder.PickList[Passenger]
+      .extract(_ => {
+        val pickListData = RandomText.pickLists(domain = List("A", "B", "C", "D", "E", "F", "G", "H", "I"))
+          .withProbabilityOfEmpty(0.2)
+        pickListData.next()
+      }).asPredictor
+
+    val randomNumericData = FeatureBuilder.Real[Passenger]
+      .extract(_ => {
+        val numericData = RandomReal.logNormal[Currency](mean = 10.0, sigma = 1.0)
+          .withProbabilityOfEmpty(0.2)
+        numericData.next()
+      }).asPredictor
+
     ////////////////////////////////////////////////////////////////////////////////
     // TRANSFORMED FEATURES
     /////////////////////////////////////////////////////////////////////////////////
@@ -126,9 +141,8 @@ object OpTitanicSimple {
 
     // Define a feature of type vector containing all the predictors you'd like to use
     val passengerFeatures = Seq(
-      pClass, name, age, sibSp, parCh, ticket,
-      cabin, embarked, familySize, estimatedCostOfTickets,
-      pivotedSex, ageGroup, normedAge
+      pClass, name, sex, age, sibSp, parCh, ticket, fare,
+      cabin, embarked, randomPickListData, randomNumericData
     ).transmogrify()
 
     // Optionally check the features with a sanity checker
@@ -136,7 +150,7 @@ object OpTitanicSimple {
 
     // Define the model we want to use (here a simple logistic regression) and get the resulting output
     val prediction = BinaryClassificationModelSelector.withTrainValidationSplit(
-      modelTypesToUse = Seq(BinaryClassificationModelsToTry.OpLogisticRegression)
+      modelTypesToUse = Seq(BinaryClassificationModelsToTry.OpRandomForestClassifier)
     ).setInput(survived, checkedFeatures).getOutput()
 
     val evaluator = Evaluators.BinaryClassification().setLabelCol(survived).setPredictionCol(prediction)
@@ -175,7 +189,6 @@ object OpTitanicSimple {
     val fullMetric = evaluator.evaluate(fullDf)
     println(s"trainMetric: $trainMetric, holdoutMetric: $holdoutMetric, fullMetric: $fullMetric")
 
-
     println()
     println(s"Calculating permutation feature importances...")
 
@@ -195,22 +208,29 @@ object OpTitanicSimple {
     // TODO: Compare the permutation feature importances and model-specific feature importances to drop-column
     // feature importances (ground truth)
 
-    /*
     val permutationFeatureImportances = rawFeatureNamesToPermute.map{ rf =>
       val permutedDf = model.computeDataUpToAndPermute(prediction, nameToPermute = rf)
       val permutedMetric = evaluator.evaluate(permutedDf)
+      println(s"raw feature: $rf")
       println(s"originalMetric: ${fullMetric}")
       println(s"permutedMetric: ${permutedMetric}")
+      println()
 
       rf -> (fullMetric - permutedMetric)
     }.toMap[String, Double]
 
     println(s"permutationFeatureImportances: ")
     permutationFeatureImportances.toSeq.sortBy(-_._2).foreach(println)
-    */
+
+    println()
+    println(s"top 40 model-dependent feature contributions:")
+    modelInsights.features.flatMap(_.derivedFeatures)
+      .sortBy(x => -math.abs(x.contribution.headOption.getOrElse(0.0))).take(50)
+      .foreach(x => println(x.derivedFeatureName, x.corr, x.contribution.headOption.getOrElse(0.0)))
 
 
     // Example retrain model w/o name feature:
+    /*
     val droppedFeatureVector = Seq(
       pClass, age, sibSp, parCh, ticket,
       cabin, embarked, familySize, estimatedCostOfTickets,
@@ -224,11 +244,7 @@ object OpTitanicSimple {
     val droppedEvaluator = Evaluators.BinaryClassification().setLabelCol(survived).setPredictionCol(droppedPrediction)
     val (droppedScores, droppedMetrics) = droppedModel.scoreAndEvaluate(evaluator = droppedEvaluator)
     println(s"Metrics: $droppedMetrics")
-
-    // test push
-    // val (fullTrainDf, fullHoldoutDf) = dataSplitter.split(fullDf)
-    // val trainSetMetric = evaluator.evaluate(fullTrainDf)
-    // val holdoutSetMetric = evaluator.evaluate(fullHoldoutDf)
+    */
 
     // Stop Spark gracefully
     spark.stop()

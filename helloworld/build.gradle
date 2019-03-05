@@ -72,6 +72,7 @@ dependencies {
 
     // TransmogrifAI
     compile "com.salesforce.transmogrifai:transmogrifai-core_$scalaVersion:$transmogrifaiVersion"
+    compile "com.salesforce.transmogrifai:transmogrifai-testkit_$scalaVersion:$transmogrifaiVersion"
 
     // Pretrained models used in TransmogrifAI, e.g. OpenNLP POS/NER models etc. (optional)
     // compile "com.salesforce.transmogrifai:transmogrifai-models_$scalaVersion:$transmogrifaiVersion"
