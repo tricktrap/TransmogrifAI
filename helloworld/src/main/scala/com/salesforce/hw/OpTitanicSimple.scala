@@ -36,7 +36,10 @@ import com.salesforce.op.features.FeatureBuilder
 import com.salesforce.op.features.types._
 import com.salesforce.op.readers.DataReaders
 import com.salesforce.op.stages.impl.classification.BinaryClassificationModelSelector
-import com.salesforce.op.stages.impl.classification.BinaryClassificationModelsToTry._
+import com.salesforce.op.stages.impl.classification.BinaryClassificationModelsToTry
+import com.salesforce.op.stages.impl.classification.OpLogisticRegression
+import com.salesforce.op.stages.impl.tuning.DataSplitter
+
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
 
@@ -133,7 +136,7 @@ object OpTitanicSimple {
 
     // Define the model we want to use (here a simple logistic regression) and get the resulting output
     val prediction = BinaryClassificationModelSelector.withTrainValidationSplit(
-      modelTypesToUse = Seq(OpLogisticRegression)
+      modelTypesToUse = Seq(BinaryClassificationModelsToTry.OpLogisticRegression)
     ).setInput(survived, checkedFeatures).getOutput()
 
     val evaluator = Evaluators.BinaryClassification().setLabelCol(survived).setPredictionCol(prediction)
@@ -158,7 +161,7 @@ object OpTitanicSimple {
 
     println("Metrics:\n" + metrics)
 
-    val modelInsights = fittedWorkflow.modelInsights(prediction)
+    val modelInsights = model.modelInsights(prediction)
     val dataSplitter = DataSplitter(
       seed = modelInsights.selectedModelInfo.get.dataPrepParameters("seed").asInstanceOf[Long],
       reserveTestFraction = modelInsights.selectedModelInfo.get
@@ -192,17 +195,36 @@ object OpTitanicSimple {
     // TODO: Compare the permutation feature importances and model-specific feature importances to drop-column
     // feature importances (ground truth)
 
+    /*
     val permutationFeatureImportances = rawFeatureNamesToPermute.map{ rf =>
       val permutedDf = model.computeDataUpToAndPermute(prediction, nameToPermute = rf)
       val permutedMetric = evaluator.evaluate(permutedDf)
-      println(s"originalMetric: ${originalMetric}")
+      println(s"originalMetric: ${fullMetric}")
       println(s"permutedMetric: ${permutedMetric}")
 
-      rf -> (originalMetric - permutedMetric)
+      rf -> (fullMetric - permutedMetric)
     }.toMap[String, Double]
 
     println(s"permutationFeatureImportances: ")
     permutationFeatureImportances.toSeq.sortBy(-_._2).foreach(println)
+    */
+
+
+    // Example retrain model w/o name feature:
+    val droppedFeatureVector = Seq(
+      pClass, age, sibSp, parCh, ticket,
+      cabin, embarked, familySize, estimatedCostOfTickets,
+      pivotedSex, ageGroup, normedAge
+    ).transmogrify()
+    val droppedPrediction = new OpLogisticRegression().setInput(survived, droppedFeatureVector).getOutput()
+    val droppedWorkflow = new OpWorkflow().setResultFeatures(survived, droppedPrediction).setReader(dataReader)
+    val droppedModel = droppedWorkflow.train()
+    println(s"Model summary:\n${droppedModel.summaryPretty()}")
+    println("Scoring the model")
+    val droppedEvaluator = Evaluators.BinaryClassification().setLabelCol(survived).setPredictionCol(droppedPrediction)
+    val (droppedScores, droppedMetrics) = droppedModel.scoreAndEvaluate(evaluator = droppedEvaluator)
+    println(s"Metrics: $droppedMetrics")
+
 
     // val (fullTrainDf, fullHoldoutDf) = dataSplitter.split(fullDf)
     // val trainSetMetric = evaluator.evaluate(fullTrainDf)
