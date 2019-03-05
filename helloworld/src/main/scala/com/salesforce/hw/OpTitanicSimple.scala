@@ -225,7 +225,7 @@ object OpTitanicSimple {
     val (droppedScores, droppedMetrics) = droppedModel.scoreAndEvaluate(evaluator = droppedEvaluator)
     println(s"Metrics: $droppedMetrics")
 
-
+    // test push
     // val (fullTrainDf, fullHoldoutDf) = dataSplitter.split(fullDf)
     // val trainSetMetric = evaluator.evaluate(fullTrainDf)
     // val holdoutSetMetric = evaluator.evaluate(fullHoldoutDf)
