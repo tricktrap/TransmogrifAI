@@ -158,6 +158,56 @@ object OpTitanicSimple {
 
     println("Metrics:\n" + metrics)
 
+    val modelInsights = fittedWorkflow.modelInsights(prediction)
+    val dataSplitter = DataSplitter(
+      seed = modelInsights.selectedModelInfo.get.dataPrepParameters("seed").asInstanceOf[Long],
+      reserveTestFraction = modelInsights.selectedModelInfo.get
+        .dataPrepParameters("reserveTestFraction").asInstanceOf[Double]
+    )
+    val fullDf = model.computeDataUpTo(prediction)
+    val (trainDf, holdoutDf) = dataSplitter.split(fullDf)
+    println(s"Calculate metrics on the full dataframe, the training set, and the holdout set")
+    val trainMetric = evaluator.evaluate(trainDf)
+    val holdoutMetric = evaluator.evaluate(holdoutDf)
+    val fullMetric = evaluator.evaluate(fullDf)
+    println(s"trainMetric: $trainMetric, holdoutMetric: $holdoutMetric, fullMetric: $fullMetric")
+
+
+    println()
+    println(s"Calculating permutation feature importances...")
+
+    val rawFeatureNamesToPermute: Seq[String] = model.rawFeatures.filterNot(_.isResponse).map(_.name)
+    println(s"rawFeatures: ${model.rawFeatures.toList}")
+
+    // TODO: Split off holdout set and only permute columns there (much cheaper!).
+    // Is that possible with computeDataUpTo?
+
+    // TODO: Add some features in the Titanic dataset that shouldn't be good predictors (eg. random numerical and
+    // categorical features)
+
+    // TODO: Show that random forest, logistic regression, naive bayes, svm, gradient boosted trees, etc. all give
+    // similar and comparable feature importances to each other with permutation feature importances, while the
+    // model-specific measures are hard to compare / inconsistent
+
+    // TODO: Compare the permutation feature importances and model-specific feature importances to drop-column
+    // feature importances (ground truth)
+
+    val permutationFeatureImportances = rawFeatureNamesToPermute.map{ rf =>
+      val permutedDf = model.computeDataUpToAndPermute(prediction, nameToPermute = rf)
+      val permutedMetric = evaluator.evaluate(permutedDf)
+      println(s"originalMetric: ${originalMetric}")
+      println(s"permutedMetric: ${permutedMetric}")
+
+      rf -> (originalMetric - permutedMetric)
+    }.toMap[String, Double]
+
+    println(s"permutationFeatureImportances: ")
+    permutationFeatureImportances.toSeq.sortBy(-_._2).foreach(println)
+
+    // val (fullTrainDf, fullHoldoutDf) = dataSplitter.split(fullDf)
+    // val trainSetMetric = evaluator.evaluate(fullTrainDf)
+    // val holdoutSetMetric = evaluator.evaluate(fullHoldoutDf)
+
     // Stop Spark gracefully
     spark.stop()
   }

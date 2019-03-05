@@ -66,7 +66,7 @@ private[op] trait OpWorkflowCore {
   private[op] var resultFeatures: Array[OPFeature] = Array[OPFeature]()
 
   // raw features generated after data is read in and aggregated
-  private[op] var rawFeatures: Array[OPFeature] = Array[OPFeature]()
+  var rawFeatures: Array[OPFeature] = Array[OPFeature]()
 
   // features that have been blacklisted from use in dag
   private[op] var blacklistedFeatures: Array[OPFeature] = Array[OPFeature]()
