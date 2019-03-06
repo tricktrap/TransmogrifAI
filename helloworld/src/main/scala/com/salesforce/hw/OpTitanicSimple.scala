@@ -37,7 +37,7 @@ import com.salesforce.op.features.types._
 import com.salesforce.op.readers.DataReaders
 import com.salesforce.op.stages.impl.classification.BinaryClassificationModelSelector
 import com.salesforce.op.stages.impl.classification.BinaryClassificationModelsToTry
-import com.salesforce.op.stages.impl.classification.OpLogisticRegression
+import com.salesforce.op.stages.impl.classification.{OpLogisticRegression, OpRandomForestClassifier}
 import com.salesforce.op.stages.impl.tuning.DataSplitter
 
 import org.apache.spark.SparkConf
@@ -209,21 +209,34 @@ object OpTitanicSimple {
     permutationFeatureImportances.toSeq.sortBy(-_._2).foreach(println)
     */
 
-
-    // Example retrain model w/o name feature:
-    val droppedFeatureVector = Seq(
-      pClass, age, sibSp, parCh, ticket,
+    val allFeatures = Seq(
+      pClass, name, age, sibSp, parCh, ticket,
       cabin, embarked, familySize, estimatedCostOfTickets,
       pivotedSex, ageGroup, normedAge
-    ).transmogrify()
-    val droppedPrediction = new OpLogisticRegression().setInput(survived, droppedFeatureVector).getOutput()
-    val droppedWorkflow = new OpWorkflow().setResultFeatures(survived, droppedPrediction).setReader(dataReader)
-    val droppedModel = droppedWorkflow.train()
-    println(s"Model summary:\n${droppedModel.summaryPretty()}")
-    println("Scoring the model")
-    val droppedEvaluator = Evaluators.BinaryClassification().setLabelCol(survived).setPredictionCol(droppedPrediction)
-    val (droppedScores, droppedMetrics) = droppedModel.scoreAndEvaluate(evaluator = droppedEvaluator)
-    println(s"Metrics: $droppedMetrics")
+    )
+    val rawFeatureNamesToDrop: Seq[String] = model.rawFeatures.filterNot(_.isResponse).map(_.name)
+
+    var droppedFeatImp = rawFeatureNamesToDrop.map{feature_i =>
+      val droppedFeatureVector = allFeatures.filterNot(_.name == feature_i).transmogrify()
+      val droppedPrediction = modelInsights.selectedModelInfo.get.bestModelType match {
+        case "OpLogisticRegression" =>
+          new OpLogisticRegression().setInput(survived, droppedFeatureVector).getOutput()
+        case "OpRandomForestClassifier" =>
+          new OpRandomForestClassifier().setInput(survived, droppedFeatureVector).getOutput()
+      }
+      val droppedWorkflow = new OpWorkflow().setResultFeatures(survived, droppedPrediction).setReader(dataReader)
+      val droppedModel = droppedWorkflow.train()
+      println(s"Model summary:\n${droppedModel.summaryPretty()}")
+      println("Scoring the model")
+      val droppedEvaluator = Evaluators.BinaryClassification().setLabelCol(survived).setPredictionCol(droppedPrediction)
+      val (droppedScores, droppedMetrics) = droppedModel.scoreAndEvaluate(evaluator = droppedEvaluator)
+      println(s"Metrics: $droppedMetrics")
+      val droppedDf = droppedModel.computeDataUpTo(droppedPrediction)
+      val droppedMetrics2 = droppedEvaluator.evaluate(droppedDf)
+      feature_i -> (fullMetric - droppedMetrics2)
+    }.toMap[String, Double]
+    println(s"droppedFeatureImportances: ")
+    droppedFeatImp.toSeq.sortBy(-_._2).foreach(println)
 
     // test push
     // val (fullTrainDf, fullHoldoutDf) = dataSplitter.split(fullDf)
