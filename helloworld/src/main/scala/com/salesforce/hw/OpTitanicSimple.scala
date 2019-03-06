@@ -175,7 +175,6 @@ object OpTitanicSimple {
     val fullMetric = evaluator.evaluate(fullDf)
     println(s"trainMetric: $trainMetric, holdoutMetric: $holdoutMetric, fullMetric: $fullMetric")
 
-
     println()
     println(s"Calculating permutation feature importances...")
 
@@ -216,24 +215,26 @@ object OpTitanicSimple {
     )
     val rawFeatureNamesToDrop: Seq[String] = model.rawFeatures.filterNot(_.isResponse).map(_.name)
 
-    var droppedFeatImp = rawFeatureNamesToDrop.map{feature_i =>
-      val droppedFeatureVector = allFeatures.filterNot(_.name == feature_i).transmogrify()
-      val droppedPrediction = modelInsights.selectedModelInfo.get.bestModelType match {
+    var droppedFeatImp = (0 to rawFeatureNamesToDrop.size - 1).map{i =>
+      var droppedFeatureVector = allFeatures.zipWithIndex.filter(_._2 != i).map(_._1).transmogrify()
+      // val debug = allFeatures.map(_.name)
+      // println(s"$debug")
+      var droppedPrediction = modelInsights.selectedModelInfo.get.bestModelType match {
         case "OpLogisticRegression" =>
           new OpLogisticRegression().setInput(survived, droppedFeatureVector).getOutput()
         case "OpRandomForestClassifier" =>
           new OpRandomForestClassifier().setInput(survived, droppedFeatureVector).getOutput()
       }
-      val droppedWorkflow = new OpWorkflow().setResultFeatures(survived, droppedPrediction).setReader(dataReader)
-      val droppedModel = droppedWorkflow.train()
-      println(s"Model summary:\n${droppedModel.summaryPretty()}")
-      println("Scoring the model")
-      val droppedEvaluator = Evaluators.BinaryClassification().setLabelCol(survived).setPredictionCol(droppedPrediction)
-      val (droppedScores, droppedMetrics) = droppedModel.scoreAndEvaluate(evaluator = droppedEvaluator)
-      println(s"Metrics: $droppedMetrics")
-      val droppedDf = droppedModel.computeDataUpTo(droppedPrediction)
-      val droppedMetrics2 = droppedEvaluator.evaluate(droppedDf)
-      feature_i -> (fullMetric - droppedMetrics2)
+      var droppedWorkflow = new OpWorkflow().setResultFeatures(survived, droppedPrediction).setReader(dataReader)
+      var droppedModel = droppedWorkflow.train()
+      // println(s"Model summary:\n${droppedModel.summaryPretty()}")
+      // println("Scoring the model")
+      var droppedEvaluator = Evaluators.BinaryClassification().setLabelCol(survived).setPredictionCol(droppedPrediction)
+      var (droppedScores, droppedMetrics) = droppedModel.scoreAndEvaluate(evaluator = droppedEvaluator)
+      // println(s"Metrics: $droppedMetrics")
+      var droppedDf = droppedModel.computeDataUpTo(droppedPrediction)
+      var droppedMetrics2 = droppedEvaluator.evaluate(droppedDf)
+      rawFeatureNamesToDrop(i) -> (fullMetric - droppedMetrics2)
     }.toMap[String, Double]
     println(s"droppedFeatureImportances: ")
     droppedFeatImp.toSeq.sortBy(-_._2).foreach(println)
