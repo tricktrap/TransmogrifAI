@@ -111,7 +111,6 @@ class OpWorkflowModel(val uid: String = UID[OpWorkflowModel], val trainingParams
 
     // Save the original columns of the raw dataframe
     val originalColumns = originalDf.columns
-    val keyName = "key"
     val joinColName = "_permutation-joinId"
     val permutedColName = "permuted" + nameToPermute
 
@@ -122,6 +121,8 @@ class OpWorkflowModel(val uid: String = UID[OpWorkflowModel], val trainingParams
 
     // Append a joinId to the dataframe
     val dfWithJoinKey = addRowIndex(originalDf)
+    println(s"dfWithJoinKey:")
+    dfWithJoinKey.show(20)
 
     // Select out a single column, permute it, and then append the same monotonically increasing id to be used as
     // a join key
@@ -130,6 +131,8 @@ class OpWorkflowModel(val uid: String = UID[OpWorkflowModel], val trainingParams
       .orderBy(rand)
       .withColumnRenamed(nameToPermute, permutedColName)
     )
+    println(s"singleColPermutedDf:")
+    singleColPermutedDf.show(20)
 
     // Join the two dataframes together on the join id we just created, rename the column, drop the original one,
     // and then put them back into the original ordering

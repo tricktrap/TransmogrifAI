@@ -32,54 +32,40 @@ package com.salesforce.hw
 
 import com.salesforce.op._
 import com.salesforce.op.evaluators.Evaluators
-import com.salesforce.op.features.FeatureBuilder
+import com.salesforce.op.features.{FeatureBuilder, FeatureLike}
 import com.salesforce.op.features.types._
-import com.salesforce.op.readers.DataReaders
-import com.salesforce.op.stages.impl.classification.BinaryClassificationModelSelector
-import com.salesforce.op.stages.impl.classification.BinaryClassificationModelsToTry
-import com.salesforce.op.stages.impl.classification.OpLogisticRegression
+import com.salesforce.op.readers.{CSVProductReader, DataReaders}
+import com.salesforce.op.stages.impl.regression.RegressionModelsToTry.OpRandomForestRegressor
+import com.salesforce.op.stages.impl.regression._
 import com.salesforce.op.stages.impl.tuning.DataSplitter
 import com.salesforce.op.testkit._
-
+import com.salesforce.op.utils.io.csv.CSVOptions
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
 
-/**
- * Define a case class corresponding to our data file (nullable columns must be Option types)
- *
- * @param id       passenger id
- * @param survived 1: survived, 0: did not survive
- * @param pClass   passenger class
- * @param name     passenger name
- * @param sex      passenger sex (male/female)
- * @param age      passenger age (one person has a non-integer age so this must be a double)
- * @param sibSp    number of siblings/spouses traveling with this passenger
- * @param parCh    number of parents/children traveling with this passenger
- * @param ticket   ticket id string
- * @param fare     ticket price
- * @param cabin    cabin id string
- * @param embarked location where passenger embarked
- */
-case class Passenger
+case class BostonHouse2
 (
-  id: Int,
-  survived: Int,
-  pClass: Option[Int],
-  name: Option[String],
-  sex: Option[String],
-  age: Option[Double],
-  sibSp: Option[Int],
-  parCh: Option[Int],
-  ticket: Option[String],
-  fare: Option[Double],
-  cabin: Option[String],
-  embarked: Option[String]
+  rowId: Int,
+  crim: Double,
+  zn: Double,
+  indus: Double,
+  chas: String,
+  nox: Double,
+  rm: Double,
+  age: Double,
+  dis: Double,
+  rad: Int,
+  tax: Double,
+  ptratio: Double,
+  b: Double,
+  lstat: Double,
+  medv: Double
 )
 
 /**
  * A simplified TransmogrifAI example classification app using the Titanic dataset
  */
-object OpTitanicSimple {
+object OpBostonSimple {
 
   /**
    * Run this from the command line with
@@ -97,33 +83,40 @@ object OpTitanicSimple {
     implicit val spark = SparkSession.builder.config(new SparkConf()).getOrCreate()
     import spark.implicits._ // Needed for Encoders for the Passenger case class
 
+
+
     ////////////////////////////////////////////////////////////////////////////////
     // RAW FEATURE DEFINITIONS
     /////////////////////////////////////////////////////////////////////////////////
 
     // Define features using the OP types based on the data
-    val survived = FeatureBuilder.RealNN[Passenger].extract(_.survived.toRealNN).asResponse
-    val pClass = FeatureBuilder.PickList[Passenger].extract(_.pClass.map(_.toString).toPickList).asPredictor
-    val name = FeatureBuilder.Text[Passenger].extract(_.name.toText).asPredictor
-    val sex = FeatureBuilder.PickList[Passenger].extract(_.sex.map(_.toString).toPickList).asPredictor
-    val age = FeatureBuilder.Real[Passenger].extract(_.age.toReal).asPredictor
-    val sibSp = FeatureBuilder.Integral[Passenger].extract(_.sibSp.toIntegral).asPredictor
-    val parCh = FeatureBuilder.Integral[Passenger].extract(_.parCh.toIntegral).asPredictor
-    val ticket = FeatureBuilder.PickList[Passenger].extract(_.ticket.map(_.toString).toPickList).asPredictor
-    val fare = FeatureBuilder.Real[Passenger].extract(_.fare.toReal).asPredictor
-    val cabin = FeatureBuilder.PickList[Passenger].extract(_.cabin.map(_.toString).toPickList).asPredictor
-    val embarked = FeatureBuilder.PickList[Passenger].extract(_.embarked.map(_.toString).toPickList).asPredictor
+    val rowId = FeatureBuilder.Integral[BostonHouse2].extract(_.rowId.toIntegral).asPredictor
+    val crim = FeatureBuilder.RealNN[BostonHouse2].extract(_.crim.toRealNN).asPredictor
+    val zn = FeatureBuilder.RealNN[BostonHouse2].extract(_.zn.toRealNN).asPredictor
+    val indus = FeatureBuilder.RealNN[BostonHouse2].extract(_.indus.toRealNN).asPredictor
+    val chas = FeatureBuilder.PickList[BostonHouse2].extract(x => Option(x.chas).toPickList).asPredictor
+    val nox = FeatureBuilder.RealNN[BostonHouse2].extract(_.nox.toRealNN).asPredictor
+    val rm = FeatureBuilder.RealNN[BostonHouse2].extract(_.rm.toRealNN).asPredictor
+    val age = FeatureBuilder.RealNN[BostonHouse2].extract(_.age.toRealNN).asPredictor
+    val dis = FeatureBuilder.RealNN[BostonHouse2].extract(_.dis.toRealNN).asPredictor
+    val rad = FeatureBuilder.Integral[BostonHouse2].extract(_.rad.toIntegral).asPredictor
+    val tax = FeatureBuilder.RealNN[BostonHouse2].extract(_.tax.toRealNN).asPredictor
+    val ptratio = FeatureBuilder.RealNN[BostonHouse2].extract(_.ptratio.toRealNN).asPredictor
+    val b = FeatureBuilder.RealNN[BostonHouse2].extract(_.b.toRealNN).asPredictor
+    val lstat = FeatureBuilder.RealNN[BostonHouse2].extract(_.lstat.toRealNN).asPredictor
 
-    val randomPickListData = FeatureBuilder.PickList[Passenger]
+    val medv = FeatureBuilder.RealNN[BostonHouse2].extract(_.medv.toRealNN).asResponse
+
+    val randomPickListData = FeatureBuilder.PickList[BostonHouse2]
       .extract(_ => {
         val pickListData = RandomText.pickLists(domain = List("A", "B", "C", "D", "E", "F", "G", "H", "I"))
           .withProbabilityOfEmpty(0.2)
         pickListData.next()
       }).asPredictor
 
-    val randomNumericData = FeatureBuilder.Real[Passenger]
+    val randomNumericData = FeatureBuilder.Real[BostonHouse2]
       .extract(_ => {
-        val numericData = RandomReal.logNormal[Currency](mean = 10.0, sigma = 1.0)
+        val numericData = RandomReal.logNormal[Real](mean = 10.0, sigma = 1.0)
           .withProbabilityOfEmpty(0.2)
         numericData.next()
       }).asPredictor
@@ -132,38 +125,35 @@ object OpTitanicSimple {
     // TRANSFORMED FEATURES
     /////////////////////////////////////////////////////////////////////////////////
 
-    // Do some basic feature engineering using knowledge of the underlying dataset
-    val familySize = sibSp + parCh + 1
-    val estimatedCostOfTickets = familySize * fare
-    val pivotedSex = sex.pivot()
-    val normedAge = age.fillMissingWithMean().zNormalize()
-    val ageGroup = age.map[PickList](_.value.map(v => if (v > 18) "adult" else "child").toPickList)
-
     // Define a feature of type vector containing all the predictors you'd like to use
-    val passengerFeatures = Seq(
-      pClass, name, sex, age, sibSp, parCh, ticket, fare,
-      cabin, embarked, randomPickListData, randomNumericData
+    val houseFeatures = Seq(rowId, crim, zn, indus, chas, nox, rm, age,
+      dis, rad, tax, ptratio, b, lstat, randomPickListData, randomNumericData
     ).transmogrify()
 
     // Optionally check the features with a sanity checker
-    val checkedFeatures = survived.sanityCheck(passengerFeatures, removeBadFeatures = true)
+    val checkedFeatures = medv.sanityCheck(houseFeatures, removeBadFeatures = true)
 
     // Define the model we want to use (here a simple logistic regression) and get the resulting output
-    val prediction = BinaryClassificationModelSelector.withTrainValidationSplit(
-      modelTypesToUse = Seq(BinaryClassificationModelsToTry.OpDecisionTreeClassifier)
-    ).setInput(survived, checkedFeatures).getOutput()
+    val prediction: FeatureLike[Prediction] = RegressionModelSelector.withTrainValidationSplit(
+      modelTypesToUse = Seq(RegressionModelsToTry.OpRandomForestRegressor)
+    ).setInput(medv, checkedFeatures).getOutput()
 
-    val evaluator = Evaluators.BinaryClassification().setLabelCol(survived).setPredictionCol(prediction)
+    // val prediction = new OpLinearRegression().setInput(medv, houseFeatures).getOutput()
+    // val prediction = new OpRandomForestRegressor().setInput(medv, houseFeatures).getOutput()
+    // val prediction = new OpGBTRegressor().setInput(medv, houseFeatures).getOutput()
 
     ////////////////////////////////////////////////////////////////////////////////
     // WORKFLOW
     /////////////////////////////////////////////////////////////////////////////////
 
     // Define a way to read data into our Passenger class from our CSV file
-    val dataReader = DataReaders.Simple.csvCase[Passenger](path = Option(csvFilePath), key = _.id.toString)
+    val dataReader = new CSVProductReader[BostonHouse2](readPath = Option(csvFilePath),
+      key = _.rowId.toString, options = new CSVOptions(header = true))
 
     // Define a new workflow and attach our data reader
-    val workflow = new OpWorkflow().setResultFeatures(survived, prediction).setReader(dataReader)
+    val workflow = new OpWorkflow().setResultFeatures(medv, prediction).setReader(dataReader)
+
+    val evaluator = Evaluators.Regression().setLabelCol(medv).setPredictionCol(prediction)
 
     // Fit the workflow to the data
     val model = workflow.train()
@@ -181,6 +171,7 @@ object OpTitanicSimple {
       reserveTestFraction = modelInsights.selectedModelInfo.get
         .dataPrepParameters("reserveTestFraction").asInstanceOf[Double]
     )
+
     val fullDf = model.computeDataUpTo(prediction)
     val (trainDf, holdoutDf) = dataSplitter.split(fullDf)
     println(s"Calculate metrics on the full dataframe, the training set, and the holdout set")
@@ -221,8 +212,8 @@ object OpTitanicSimple {
       println(s"permutedHoldoutMetric: $permutedHoldoutMetric")
       println()
 
-      // Why is the holdout difference almost always negative? Permuting features makes the models better?!
-      rf -> (trainMetric - permutedTrainMetric)
+      // Switch these because the metric we're using RMSE is better the smaller it is
+      rf -> -(trainMetric - permutedTrainMetric)
     }.toMap[String, Double]
 
     println(s"permutationFeatureImportances: ")
@@ -241,22 +232,11 @@ object OpTitanicSimple {
       .sortBy(x => -math.abs(x.contribution.headOption.getOrElse(0.0))).take(50)
       .foreach(x => println(x.derivedFeatureName, x.corr, x.contribution.headOption.getOrElse(0.0)))
 
-    // Example retrain model w/o name feature:
-    /*
-    val droppedFeatureVector = Seq(
-      pClass, age, sibSp, parCh, ticket,
-      cabin, embarked, familySize, estimatedCostOfTickets,
-      pivotedSex, ageGroup, normedAge
-    ).transmogrify()
-    val droppedPrediction = new OpLogisticRegression().setInput(survived, droppedFeatureVector).getOutput()
-    val droppedWorkflow = new OpWorkflow().setResultFeatures(survived, droppedPrediction).setReader(dataReader)
-    val droppedModel = droppedWorkflow.train()
-    println(s"Model summary:\n${droppedModel.summaryPretty()}")
-    println("Scoring the model")
-    val droppedEvaluator = Evaluators.BinaryClassification().setLabelCol(survived).setPredictionCol(droppedPrediction)
-    val (droppedScores, droppedMetrics) = droppedModel.scoreAndEvaluate(evaluator = droppedEvaluator)
-    println(s"Metrics: $droppedMetrics")
-    */
+    // Correlation between feature importances and correlations
+    val contributionMap: Map[String, (Double, Double)] = modelInsights.features.flatMap(_.derivedFeatures)
+      .map(x => x.derivedFeatureName -> (x.corr.getOrElse(0.0), x.contribution.headOption.getOrElse(0.0))).toMap
+
+
 
     // Stop Spark gracefully
     spark.stop()
