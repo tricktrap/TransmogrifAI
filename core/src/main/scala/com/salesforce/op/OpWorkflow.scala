@@ -372,6 +372,9 @@ class OpWorkflow(val uid: String = UID[OpWorkflow]) extends OpWorkflowCore {
       if (a.getReserveTestFraction > b.getReserveTestFraction) a else b
     }
     val (train, test) = splitter.map(_.split(data)).getOrElse((data, spark.emptyDataFrame))
+    println(s"Data has been split into train/test sets!")
+    println(s"training set size: ${train.count()}")
+    println(s"test set size: ${test.count()}")
     val hasTest = !test.isEmpty
 
     val dag = FitStagesUtil.computeDAG(resultFeatures)

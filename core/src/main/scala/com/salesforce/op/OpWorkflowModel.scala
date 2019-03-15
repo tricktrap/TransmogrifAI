@@ -136,12 +136,23 @@ class OpWorkflowModel(val uid: String = UID[OpWorkflowModel], val trainingParams
 
     // Join the two dataframes together on the join id we just created, rename the column, drop the original one,
     // and then put them back into the original ordering
-    dfWithJoinKey
+    // TODO: It looks like this join reorders the dataframe (why???). Either replace with an RDD join if that will
+    // TODO: preserve order, or try and sort the dataframe by join key after the join. Note that we need the order
+    // TODO: of the dataframe's rows to not change since we need to use the train/test splits in the feat importances
+    // Alternatively, we could have already decided whether the row is part of the training or test set, and then
+    //
+    val res = dfWithJoinKey
       .join(singleColPermutedDf, Seq(joinColName), "inner")
       .drop(nameToPermute)
       .withColumnRenamed(permutedColName, nameToPermute)
+      .orderBy(joinColName)
       .select(originalColumns.head, originalColumns.tail: _*)
       .persist() // don't want to redo this calculation
+
+    println("result df:")
+    res.show(20)
+
+    res
   }
 
   /**

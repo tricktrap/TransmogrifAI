@@ -40,7 +40,6 @@ import com.salesforce.op.stages.impl.classification.BinaryClassificationModelsTo
 import com.salesforce.op.stages.impl.classification.{OpLogisticRegression, OpRandomForestClassifier}
 import com.salesforce.op.stages.impl.tuning.DataSplitter
 import com.salesforce.op.testkit._
-
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
 
@@ -148,9 +147,12 @@ object OpTitanicSimple {
     // Optionally check the features with a sanity checker
     val checkedFeatures = survived.sanityCheck(passengerFeatures, removeBadFeatures = true)
 
+    val dataSplitter = DataSplitter().setReserveTestFraction(0.2)
+
     // Define the model we want to use (here a simple logistic regression) and get the resulting output
     val prediction = BinaryClassificationModelSelector.withTrainValidationSplit(
-      modelTypesToUse = Seq(BinaryClassificationModelsToTry.OpDecisionTreeClassifier)
+      splitter = Option(dataSplitter),
+      modelTypesToUse = Seq(BinaryClassificationModelsToTry.OpRandomForestClassifier)
     ).setInput(survived, checkedFeatures).getOutput()
 
     val evaluator = Evaluators.BinaryClassification().setLabelCol(survived).setPredictionCol(prediction)
@@ -176,12 +178,13 @@ object OpTitanicSimple {
     println("Metrics:\n" + metrics)
 
     val modelInsights = model.modelInsights(prediction)
-    val dataSplitter = DataSplitter(
-      seed = modelInsights.selectedModelInfo.get.dataPrepParameters("seed").asInstanceOf[Long],
-      reserveTestFraction = modelInsights.selectedModelInfo.get
-        .dataPrepParameters("reserveTestFraction").asInstanceOf[Double]
-    )
+    // val dataSplitter = DataSplitter(
+    //   seed = modelInsights.selectedModelInfo.get.dataPrepParameters("seed").asInstanceOf[Long],
+    //  reserveTestFraction = modelInsights.selectedModelInfo.get
+    //    .dataPrepParameters("reserveTestFraction").asInstanceOf[Double]
+    // )
     val fullDf = model.computeDataUpTo(prediction)
+    // fullDf.show(10)
     val (trainDf, holdoutDf) = dataSplitter.split(fullDf)
     println(s"Calculate metrics on the full dataframe, the training set, and the holdout set")
     val trainMetric = evaluator.evaluate(trainDf)
@@ -210,10 +213,18 @@ object OpTitanicSimple {
 
     val permutationFeatureImportances = rawFeatureNamesToPermute.map{ rf =>
       val permutedDf = model.computeDataUpToAndPermute(prediction, nameToPermute = rf)
+      println(s"permutedDf:")
+      permutedDf.show(10)
       val (permutedTrainDf, permutedHoldoutDf) = dataSplitter.split(permutedDf)
+      println(s"permutedTrainDf:")
+      permutedTrainDf.show(10)
+      println(s"permutedHoldoutDf:")
+      permutedHoldoutDf.show(10)
       val permutedTrainMetric = evaluator.evaluate(permutedTrainDf)
       val permutedHoldoutMetric = evaluator.evaluate(permutedHoldoutDf)
 
+      // Note, we don't want to split things up into holdout vs. train sets because the model is retrained on the
+      // entire dataset fed in? Is that actually true??
       println(s"raw feature: $rf")
       println(s"trainMetric: $trainMetric")
       println(s"holdoutMetric: $holdoutMetric")
@@ -222,18 +233,21 @@ object OpTitanicSimple {
       println()
 
       // Why is the holdout difference almost always negative? Permuting features makes the models better?!
-      rf -> (trainMetric - permutedTrainMetric)
-    }.toMap[String, Double]
+      rf -> ((trainMetric - permutedTrainMetric), (holdoutMetric - permutedHoldoutMetric))
+    }.toMap[String, (Double, Double)]
 
-    println(s"permutationFeatureImportances: ")
-    permutationFeatureImportances.toSeq.sortBy(-_._2).foreach(println)
+    println(s"permutationFeatureImportances (on train set): ")
+    permutationFeatureImportances.toSeq.sortBy(-_._2._1).foreach(println)
     println()
 
-    val pfiSum = permutationFeatureImportances.values.map(math.abs).sum
-    val normalizedPFIs = permutationFeatureImportances.mapValues(_ / pfiSum)
-    
-    println(s"normalized permutation feature importances: ")
-    normalizedPFIs.toSeq.sortBy(-_._2).foreach(println)
+    println(s"permutationFeatureImportances (on holdout set): ")
+    permutationFeatureImportances.toSeq.sortBy(-_._2._2).foreach(println)
+    println()
+
+    // val pfiSum = permutationFeatureImportances.values.map(math.abs).sum
+    // val normalizedPFIs = permutationFeatureImportances.mapValues(_ / pfiSum)
+    // println(s"normalized permutation feature importances: ")
+    // normalizedPFIs.toSeq.sortBy(-_._2).foreach(println)
 
     println()
     println(s"top 40 model-dependent feature contributions:")
