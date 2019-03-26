@@ -586,6 +586,9 @@ class SanityChecker(uid: String = UID[SanityChecker])
       case e: NoSuchElementException =>
         throw new IllegalArgumentException("Vector input metadata is malformed: ", e)
     }
+    vectorMeta.columns.foreach(x => logInfo(s"${x.toMetadata().toString()}    ${x.makeColName()}"))
+    logInfo(s"vectorMetaSize: ${vectorMeta.size.toString}, featureSize: $featureSize")
+    data.printSchema()
 
     require(featureSize == vectorMeta.size,
       "Number of columns in vector metadata did not match number of columns in data, check your vectorizers")
