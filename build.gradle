@@ -95,6 +95,8 @@ configure(allProjs) {
         akkaSlf4jVersion = '2.3.11'
         mleapVersion = '0.13.0'
         memoryFilesystemVersion = '2.1.0'
+        aardpfarkVersion = '0.1.0-SNAPSHOT'
+        hadrianVersion = '0.8.5'
 
         mainClassName = 'com.salesforce.Main'
     }
