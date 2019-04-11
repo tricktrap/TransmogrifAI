@@ -238,7 +238,8 @@ class OpWorkflowTest extends FlatSpec with PassengerSparkFixtureTest {
   }
 
   it should "use the raw feature filter to generate data instead of the reader when the filter is specified" in {
-    val fv = Seq(age, gender, height, weight, description, boarded, stringMap, numericMap, booleanMap).transmogrify()
+//    val fv = Seq(age, gender, height, weight, description, boarded, stringMap, numericMap, booleanMap).transmogrify()
+    val fv = gender.map[Text, RealNN](description, (g, d) => (g.value.size + d.value.size).toRealNN). transmogrify()
     val survivedNum = survived.occurs()
     val pred = BinaryClassificationModelSelector().setInput(survivedNum, fv).getOutput()
     val wf = new OpWorkflow()
@@ -289,6 +290,32 @@ class OpWorkflowTest extends FlatSpec with PassengerSparkFixtureTest {
       densityByHeightNormed.name, whyNotNormed.name
     )
   }
+
+  it should "remove features with the raw feature filter even when the DAG is complex" in {
+    val sim = gender.toNGramSimilarity(description.toMultiPickList).alias("test")
+    val fv = Seq(age, gender, height, weight, description, boarded, stringMap, numericMap, booleanMap, sim,
+      whyNotNormed, density, densityNormed).transmogrify()
+    val survivedNum = survived.occurs()
+    val checked = survivedNum.sanityCheck(fv)
+    val wf = new OpWorkflow()
+      .setResultFeatures(checked)
+      .withRawFeatureFilter(
+        trainingReader = Option(dataReader),
+        scoringReader = None,
+        minFillRate = 0.5
+      )
+
+    val wfM = wf.train()
+    println(checked.prettyParentStages)
+    println(wf.getBlacklist().toList.map(_.name))
+    println(wf.getResultFeatures().head.prettyParentStages)
+    wf.getRawFeatureDistributions().length shouldBe 13
+    wf.getRawTrainingFeatureDistributions() shouldBe wf.getRawFeatureDistributions()
+    val data = wfM.score()
+    println(data.schema(1).metadata)
+
+  }
+
 
   it should "correctly set parameters on workflow stages when the parameter map is set" in {
     workflow.stages.collect {

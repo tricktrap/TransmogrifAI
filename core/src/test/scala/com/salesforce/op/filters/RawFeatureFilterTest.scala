@@ -30,7 +30,7 @@
 
 package com.salesforce.op.filters
 
-import com.salesforce.op.OpParams
+import com.salesforce.op.{OpParams, OpWorkflow}
 import com.salesforce.op.features.{FeatureDistributionType, OPFeature}
 import com.salesforce.op.readers.DataFrameFieldNames
 import com.salesforce.op.test.{Passenger, PassengerSparkFixtureTest}
@@ -304,6 +304,8 @@ class RawFeatureFilterTest extends FlatSpec with PassengerSparkFixtureTest with 
     val expectedDroppedMapKeys = Map[String, Set[String]]()
     nullLabelCorrelationTest(0.3, expectedDropped, Seq(), expectedDroppedMapKeys)
   }
+
+
 
   private def assertFeatureDistributions(fd: FilteredRawData, total: Int): Assertion = {
     fd.rawFeatureFilterResults.rawFeatureDistributions.length shouldBe total

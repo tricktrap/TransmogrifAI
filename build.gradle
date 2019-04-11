@@ -36,6 +36,7 @@ configure(allProjs) {
     apply plugin: 'java'
     apply plugin: 'scala'
     // apply plugin: 'findbugs'
+    apply plugin: 'maven'
     apply plugin: 'org.scoverage'
     apply plugin: 'scalaStyle'
     apply plugin: 'maven-publish'
