@@ -14,8 +14,6 @@ plugins {
     id 'net.minecrell.licenser' version '0.4.1'
     id 'com.github.jk1.dependency-license-report' version '0.5.0'
     id 'com.github.johnrengelman.shadow' version '4.0.4'
-    id 'com.jfrog.artifactory' version '4.9.5'
-
 }
 
 allprojects {
@@ -24,7 +22,7 @@ allprojects {
         jcenter()
     }
 }
-apply from: 'gradle/artifactory.gradle'
+
 apply from: 'gradle/version-properties.gradle'
 
 def allProjs = allprojects - project(':templates').subprojects
@@ -43,7 +41,6 @@ configure(allProjs) {
     apply plugin: 'maven-publish'
     apply plugin: 'signing'
     apply plugin: 'project-report'
-    apply plugin: 'com.jfrog.artifactory'
     apply plugin: 'com.commercehub.gradle.plugin.avro'
     apply plugin: 'net.minecrell.licenser'
     apply plugin: 'com.github.jk1.dependency-license-report'
@@ -95,8 +92,6 @@ configure(allProjs) {
         akkaSlf4jVersion = '2.3.11'
         mleapVersion = '0.13.0'
         memoryFilesystemVersion = '2.1.0'
-        aardpfarkVersion = '0.1.0-SNAPSHOT'
-        hadrianVersion = '0.8.5'
 
         mainClassName = 'com.salesforce.Main'
     }
@@ -284,16 +279,6 @@ task aggregateScoverage(type: org.scoverage.ScoverageAggregate) {
     description 'Aggregates scoverage reports of all subprojects.'
 }
 
-artifactoryPublish {
-    doFirst {
-        println "Overriding repository based on project version (snapshot/release) version=$project.version"
-        clientConfig.publisher.repoKey = "libs-${project.version.endsWith('-SNAPSHOT') ? 'snapshot' : 'release'}-local"
-        println("Publishing to ${clientConfig.publisher.repoKey}")
-    }
-}
-
-
-
 configure(subProjs) {
     apply from: "$rootProject.projectDir/gradle/tests.gradle"
     apply from: "$rootProject.projectDir/gradle/spark.gradle"
@@ -318,9 +303,6 @@ configure(subProjs) {
     artifacts {
         archives jar, sourcesJar, scaladocJar
     }
-
-    artifactoryPublish.dependsOn(jar, sourcesJar)
-
 
     publishing {
         publications {
@@ -397,10 +379,6 @@ configure(subProjs) {
         }
     }
 }
-
-// Skip publishing the root project
-artifactoryPublish.skip = true
-
 
 task allScaladoc(type: ScalaDoc) {
     group 'Documentation'
