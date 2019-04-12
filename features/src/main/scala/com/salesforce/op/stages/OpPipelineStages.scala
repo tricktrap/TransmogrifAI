@@ -84,6 +84,11 @@ trait OpPipelineStageBase extends OpPipelineStageParams with MLWritable {
   }
 
   /**
+   * Function to be called on setInput
+   */
+  protected def onSetInput(): Unit = {}
+
+  /**
    * Output features that will be created by this stage
    *
    * @return feature of type OutputFeatures
@@ -217,10 +222,11 @@ private[op] trait AllowLabelAsInput[O <: FeatureType] extends OpPipelineStage[O]
  * @tparam I input feature type
  * @tparam O output feature type
  */
-trait OpPipelineStage1[I <: FeatureType, O <: FeatureType]
-  extends OpPipelineStage[O] with HasIn1 with HasOut[O] {
-
+trait OpPipelineStage1[I <: FeatureType, O <: FeatureType] extends OpPipelineStage[O] with HasIn1 {
   self: PipelineStage =>
+
+  implicit val tto: TypeTag[O]
+  implicit val ttov: TypeTag[O#Value]
 
   final override type InputFeatures = FeatureLike[I]
 
@@ -230,7 +236,16 @@ trait OpPipelineStage1[I <: FeatureType, O <: FeatureType]
 
   protected[op] override def outputFeatureUid: String = FeatureUID[O](uid)
 
+  override def getOutput(): FeatureLike[O] = new Feature[O](
+    uid = outputFeatureUid,
+    name = getOutputFeatureName,
+    originStage = this,
+    isResponse = outputIsResponse,
+    parents = getInputFeatures()
+  )(tto)
+
 }
+
 
 /**
  * Pipeline stage of Feature type I to Features O1 and O2
@@ -304,8 +319,11 @@ trait OpPipelineStage1to3[I <: FeatureType, O1 <: FeatureType, O2 <: FeatureType
  * @tparam O  output feature type
  */
 trait OpPipelineStage2[I1 <: FeatureType, I2 <: FeatureType, O <: FeatureType]
-  extends OpPipelineStage[O] with HasIn1 with HasIn2 with HasOut[O] {
+  extends OpPipelineStage[O] with HasIn1 with HasIn2 {
   self: PipelineStage =>
+
+  implicit val tto: TypeTag[O]
+  implicit val ttov: TypeTag[O#Value]
 
   final override type InputFeatures = (FeatureLike[I1], FeatureLike[I2])
 
@@ -316,6 +334,14 @@ trait OpPipelineStage2[I1 <: FeatureType, I2 <: FeatureType, O <: FeatureType]
   }
 
   protected[op] override def outputFeatureUid: String = FeatureUID[O](uid)
+
+  override def getOutput(): FeatureLike[O] = new Feature[O](
+    uid = outputFeatureUid,
+    name = getOutputFeatureName,
+    originStage = this,
+    isResponse = outputIsResponse,
+    parents = getInputFeatures()
+  )(tto)
 
 }
 
@@ -386,7 +412,6 @@ trait OpPipelineStage2to3[I1 <: FeatureType, I2 <: FeatureType, O1 <: FeatureTyp
   }
 }
 
-
 /**
  * Pipeline stage of Feature type I1, I2 and I3 to Feature of type O
  *
@@ -396,8 +421,11 @@ trait OpPipelineStage2to3[I1 <: FeatureType, I2 <: FeatureType, O1 <: FeatureTyp
  * @tparam O  output feature type
  */
 trait OpPipelineStage3[I1 <: FeatureType, I2 <: FeatureType, I3 <: FeatureType, O <: FeatureType]
-  extends OpPipelineStage[O] with HasIn1 with HasIn2 with HasIn3 with HasOut[O] {
+  extends OpPipelineStage[O] with HasIn1 with HasIn2 with HasIn3 {
   self: PipelineStage =>
+
+  implicit val tto: TypeTag[O]
+  implicit val ttov: TypeTag[O#Value]
 
   final override type InputFeatures = (FeatureLike[I1], FeatureLike[I2], FeatureLike[I3])
 
@@ -409,6 +437,13 @@ trait OpPipelineStage3[I1 <: FeatureType, I2 <: FeatureType, I3 <: FeatureType, 
 
   protected[op] override def outputFeatureUid: String = FeatureUID[O](uid)
 
+  override def getOutput(): FeatureLike[O] = new Feature[O](
+    uid = outputFeatureUid,
+    name = getOutputFeatureName,
+    originStage = this,
+    isResponse = outputIsResponse,
+    parents = getInputFeatures()
+  )(tto)
 }
 
 /**
@@ -455,8 +490,11 @@ trait OpPipelineStage3to2[I1 <: FeatureType, I2 <: FeatureType, I3 <: FeatureTyp
  * @tparam O  output feature type
  */
 trait OpPipelineStage4[I1 <: FeatureType, I2 <: FeatureType, I3 <: FeatureType, I4 <: FeatureType, O <: FeatureType]
-  extends OpPipelineStage[O] with HasIn1 with HasIn2 with HasIn3 with HasIn4 with HasOut[O] {
+  extends OpPipelineStage[O] with HasIn1 with HasIn2 with HasIn3 with HasIn4 {
   self: PipelineStage =>
+
+  implicit val tto: TypeTag[O]
+  implicit val ttov: TypeTag[O#Value]
 
   final override type InputFeatures = (FeatureLike[I1], FeatureLike[I2], FeatureLike[I3], FeatureLike[I4])
 
@@ -468,6 +506,13 @@ trait OpPipelineStage4[I1 <: FeatureType, I2 <: FeatureType, I3 <: FeatureType, 
 
   protected[op] override def outputFeatureUid: String = FeatureUID[O](uid)
 
+  override def getOutput(): FeatureLike[O] = new Feature[O](
+    uid = outputFeatureUid,
+    name = getOutputFeatureName,
+    originStage = this,
+    isResponse = outputIsResponse,
+    parents = getInputFeatures()
+  )(tto)
 }
 
 
@@ -477,9 +522,11 @@ trait OpPipelineStage4[I1 <: FeatureType, I2 <: FeatureType, I3 <: FeatureType, 
  * @tparam I input feature type
  * @tparam O output feature type
  */
-trait OpPipelineStageN[I <: FeatureType, O <: FeatureType]
-  extends OpPipelineStage[O] with HasInN with HasOut[O] {
+trait OpPipelineStageN[I <: FeatureType, O <: FeatureType] extends OpPipelineStage[O] with HasInN {
   self: PipelineStage =>
+
+  implicit val tto: TypeTag[O]
+  implicit val ttov: TypeTag[O#Value]
 
   final override type InputFeatures = Array[FeatureLike[I]]
 
@@ -493,6 +540,13 @@ trait OpPipelineStageN[I <: FeatureType, O <: FeatureType]
 
   protected[op] override def outputFeatureUid: String = FeatureUID[O](uid)
 
+  override def getOutput(): FeatureLike[O] = new Feature[O](
+    uid = outputFeatureUid,
+    name = getOutputFeatureName,
+    originStage = this,
+    isResponse = outputIsResponse,
+    parents = getInputFeatures()
+  )(tto)
 }
 
 /**
@@ -502,9 +556,12 @@ trait OpPipelineStageN[I <: FeatureType, O <: FeatureType]
  * @tparam I2 input sequence feature type
  * @tparam O output feature type
  */
-trait OpPipelineStage2N[I1 <: FeatureType, I2 <: FeatureType, O <: FeatureType]
-  extends OpPipelineStage[O] with HasIn1PlusN with HasOut[O] {
+trait OpPipelineStage2N[I1 <: FeatureType, I2 <: FeatureType, O <: FeatureType] extends OpPipelineStage[O]
+  with HasIn1PlusN {
   self: PipelineStage =>
+
+  implicit val tto: TypeTag[O]
+  implicit val ttov: TypeTag[O#Value]
 
   final override type InputFeatures = (FeatureLike[I1], Array[FeatureLike[I2]])
 
@@ -519,6 +576,13 @@ trait OpPipelineStage2N[I1 <: FeatureType, I2 <: FeatureType, O <: FeatureType]
 
   protected[op] override def outputFeatureUid: String = FeatureUID[O](uid)
 
+  override def getOutput(): FeatureLike[O] = new Feature[O](
+    uid = outputFeatureUid,
+    name = getOutputFeatureName,
+    originStage = this,
+    isResponse = outputIsResponse,
+    parents = getInputFeatures()
+  )(tto)
 }
 
 
