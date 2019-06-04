@@ -322,7 +322,7 @@ trait ConditionalDataReader[T] extends AggregatedReader[T] {
   private def cutOffTime(rawTargetTimes: Seq[Long], timeStampToKeep: TimeStampToKeep): CutOffTime = {
     import TimeStampToKeep._
     val targetTime: Long =
-      if (rawTargetTimes.isEmpty) DateTimeUtils.now().getMillis
+      if (rawTargetTimes.isEmpty) DateTimeUtils.getMillis(DateTimeUtils.now())
       else timeStampToKeep match {
         case Min => rawTargetTimes.min
         case Max => rawTargetTimes.max

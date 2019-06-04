@@ -30,21 +30,23 @@
 
 package com.salesforce.op.utils.date
 
-import java.time.LocalDateTime
-
+import java.time.format.{DateTimeFormatter, DateTimeFormatterBuilder}
+import java.time.temporal.ChronoUnit
+import java.time.{Instant, LocalDateTime, ZoneId}
+import java.util.Locale
 
 object DateTimeUtils {
 
 
   val DefaultTimeZoneStr = "UTC"
-  val DefaultTimeZone = java.time.ZoneId.of(DefaultTimeZoneStr)
+  val DefaultTimeZone = ZoneId.of(DefaultTimeZoneStr)
 
   /**
    * Get current time in default TZ
    *
    * @return
    */
-  def now(timeZone: java.time.ZoneId = DefaultTimeZone): java.time.LocalDateTime = java.time.LocalDateTime.now(DefaultTimeZone)
+  def now(timeZone: ZoneId = DefaultTimeZone): LocalDateTime = LocalDateTime.now(DefaultTimeZone)
 
   /**
    * Converts a date string with a specified time zone offset from "yyyy-MM-dd HH:mm:ss.SSS", "yyyy/MM/dd", "M/d/yyyy"
@@ -55,22 +57,27 @@ object DateTimeUtils {
    * @return unix timestamp in milliseconds
    */
   def parse(date: String, timeZoneString: String = DefaultTimeZoneStr): Long = {
-    parseToDateTime(date, timeZoneString).atZone(java.time.ZoneId.of(timeZoneString)).toInstant.toEpochMilli
+    parseToDateTime(date, timeZoneString).atZone(ZoneId.of(timeZoneString)).toInstant.toEpochMilli
   }
 
-  def parseToDateTime(date: String, timeZoneString: String = DefaultTimeZoneStr): java.time.LocalDateTime = {
-    parseDateTime(date, java.time.ZoneId.of(timeZoneString))
+  def parseToDateTime(date: String, timeZoneString: String = DefaultTimeZoneStr): LocalDateTime = {
+    parseDateTime(date, ZoneId.of(timeZoneString))
   }
 
 
-  val formatter: java.time.format.DateTimeFormatter =
-    new java.time.format.DateTimeFormatterBuilder()
-      .appendPattern("yyyy-MM-dd HH:mm:ss.SSS")
-      .appendPattern("yyyy-MM-dd HH:mm:ss")
-      .appendPattern("yyyy/MM/dd")
-      .appendPattern("M/d/yyyy")
-      .append(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME)
-      .toFormatter(java.util.Locale.US)
+  val yyyyMMdd = DateTimeFormatter.ofPattern("yyyy/MM/dd", Locale.ENGLISH)
+  val yyyyMMddHHmmssSSS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS", Locale.ENGLISH)
+  val yyyyMMddHHmmss = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)
+  val Mdyyyy = DateTimeFormatter.ofPattern("M/d/yyyy", Locale.ENGLISH)
+
+  val formatter: DateTimeFormatter =
+    new DateTimeFormatterBuilder()
+      .appendOptional(yyyyMMddHHmmssSSS)
+      .appendOptional(yyyyMMddHHmmss)
+      .appendOptional(yyyyMMdd)
+      .appendOptional(Mdyyyy)
+      .appendOptional(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+      .toFormatter(Locale.ENGLISH)
 
   /**
    * Converts a date string in ISO 8601 format ( e.g. "1997-07-16T19:20:30.456") or formatted as in
@@ -80,8 +87,8 @@ object DateTimeUtils {
    * @param timeZone time zone of input date string. E.g. "US/Eastern"
    * @return
    */
-  def parseDateTime(date: String, timeZone: java.time.ZoneId = DefaultTimeZone): java.time.LocalDateTime = {
-    java.time.LocalDateTime.parse(date, formatter.withZone(timeZone))
+  def parseDateTime(date: String, timeZone: ZoneId = DefaultTimeZone): LocalDateTime = {
+    LocalDateTime.parse(date, formatter.withZone(timeZone))
   }
 
 
@@ -92,10 +99,8 @@ object DateTimeUtils {
    * @return YYYY/MM/dd
    */
   def parseUnix(timestampInMillis: Long): String = {
-    val timestamp = java.time.LocalDateTime
-      .ofInstant(java.time.Instant.ofEpochMilli(timestampInMillis), DefaultTimeZone)
-    val format = new java.time.format.DateTimeFormatterBuilder().appendPattern("yyyy/MM/dd").toFormatter(java.util.Locale.US)
-    format.format(timestamp)
+    val timestamp = LocalDateTime.ofInstant(Instant.ofEpochMilli(timestampInMillis), DefaultTimeZone)
+    timestamp.format(yyyyMMdd)
   }
 
   /**
@@ -106,10 +111,10 @@ object DateTimeUtils {
    * @return sequence of YYYY/MM/dd strings from the start to the end dates inclusive
    */
   def getRange(startDate: String, endDate: String): Seq[String] = {
-    val start = new java.time.LocalDateTime(parse(startDate, DefaultTimeZoneStr), DefaultTimeZone)
-    val end = new LocalDateTime(parse(endDate, DefaultTimeZoneStr), DefaultTimeZone)
-    val days = java.time.temporal.ChronoUnit.DAYS.between(start, end)
-    (0 to days).map(d => parseUnix(start.plusDays(d).atZone(DefaultTimeZone).toInstant.toEpochMilli))
+    val start = parseDateTime(startDate, DefaultTimeZone)
+    val end = parseDateTime(endDate, DefaultTimeZone)
+    val days = ChronoUnit.DAYS.between(start, end).toInt
+    (0 to days).map(d => start.plusDays(d).format(yyyyMMdd))
   }
 
   /**
@@ -120,7 +125,17 @@ object DateTimeUtils {
    * @return a YYYY/MM/dd string for the day difference days from the start
    */
   def getDatePlusDays(startDate: String, difference: Int): String = {
-    val start = new LocalDateTime(parse(startDate, DefaultTimeZoneStr), DefaultTimeZone)
-    parseUnix(start.plusDays(difference).atZone(DefaultTimeZone).toInstant.toEpochMilli)
+    val start = parseDateTime(startDate, DefaultTimeZone)
+    start.plusDays(difference).format(yyyyMMdd)
+  }
+
+  /**
+   * Convert local date time to epoch millis
+   *
+   * @param ldt local date time to convert
+   * @return millis
+   */
+  def getMillis(ldt: LocalDateTime): Long = {
+    ldt.atZone(DefaultTimeZone).toInstant.toEpochMilli
   }
 }
