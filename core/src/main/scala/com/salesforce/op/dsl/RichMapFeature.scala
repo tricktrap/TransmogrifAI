@@ -30,6 +30,8 @@
 
 package com.salesforce.op.dsl
 
+import java.time.LocalDateTime
+
 import com.salesforce.op.features.FeatureLike
 import com.salesforce.op.features.types.{BinaryMap, _}
 import com.salesforce.op.stages.base.unary.UnaryLambdaTransformer
@@ -759,7 +761,7 @@ trait RichMapFeature {
       whiteListKeys: Array[String] = Array.empty,
       blackListKeys: Array[String] = Array.empty,
       trackNulls: Boolean = TransmogrifierDefaults.TrackNulls,
-      referenceDate: org.joda.time.DateTime = TransmogrifierDefaults.ReferenceDate,
+      referenceDate: LocalDateTime = TransmogrifierDefaults.ReferenceDate,
       circularDateReps: Seq[TimePeriod] = TransmogrifierDefaults.CircularDateRepresentations,
       others: Array[FeatureLike[DateMap]] = Array.empty
     ): FeatureLike[OPVector] = {
@@ -844,7 +846,7 @@ trait RichMapFeature {
       whiteListKeys: Array[String] = Array.empty,
       blackListKeys: Array[String] = Array.empty,
       trackNulls: Boolean = TransmogrifierDefaults.TrackNulls,
-      referenceDate: org.joda.time.DateTime = TransmogrifierDefaults.ReferenceDate,
+      referenceDate: LocalDateTime = TransmogrifierDefaults.ReferenceDate,
       circularDateReps: Seq[TimePeriod] = TransmogrifierDefaults.CircularDateRepresentations,
       others: Array[FeatureLike[DateTimeMap]] = Array.empty
     ): FeatureLike[OPVector] = {

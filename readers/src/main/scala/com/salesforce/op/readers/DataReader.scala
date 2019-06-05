@@ -41,7 +41,7 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.util.ClosureUtils
-import org.joda.time.{DateTimeConstants, Duration}
+import org.joda.time.Duration
 
 import scala.util.Failure
 
@@ -352,8 +352,8 @@ case class ConditionalParams[T]
 (
   timeStampFn: T => Long,
   targetCondition: T => Boolean,
-  responseWindow: Option[Duration] = Some(Duration.standardDays(DateTimeConstants.DAYS_PER_WEEK)),
-  predictorWindow: Option[Duration] = Some(Duration.standardDays(DateTimeConstants.DAYS_PER_WEEK)),
+  responseWindow: Option[Duration] = Some(Duration.standardDays(DateTimeUtils.DAYS_PER_WEEK)),
+  predictorWindow: Option[Duration] = Some(Duration.standardDays(DateTimeUtils.DAYS_PER_WEEK)),
   timeStampToKeep: TimeStampToKeep = TimeStampToKeep.Random,
   cutOffTimeFn: Option[(String, Seq[T]) => CutOffTime] = None,
   dropIfTargetConditionNotMet: Boolean = false

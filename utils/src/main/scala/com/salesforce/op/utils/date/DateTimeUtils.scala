@@ -32,10 +32,15 @@ package com.salesforce.op.utils.date
 
 import java.time.format.{DateTimeFormatter, DateTimeFormatterBuilder}
 import java.time.temporal.ChronoUnit
-import java.time.{Instant, LocalDateTime, ZoneId}
+import java.time.{DayOfWeek, Instant, LocalDateTime, ZoneId}
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 object DateTimeUtils {
+
+  val DAYS_PER_WEEK = DayOfWeek.values().size
+  val HOURS_PER_DAY = TimeUnit.DAYS.toHours(1).toInt
+
 
 
   val DefaultTimeZoneStr = "UTC"
@@ -101,6 +106,10 @@ object DateTimeUtils {
   def parseUnix(timestampInMillis: Long): String = {
     val timestamp = LocalDateTime.ofInstant(Instant.ofEpochMilli(timestampInMillis), DefaultTimeZone)
     timestamp.format(yyyyMMdd)
+  }
+
+  def parseUnixToDateTime(timestampInMillis: Long): LocalDateTime = {
+    LocalDateTime.ofInstant(Instant.ofEpochMilli(timestampInMillis), DefaultTimeZone)
   }
 
   /**
